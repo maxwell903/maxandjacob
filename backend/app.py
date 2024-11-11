@@ -36,7 +36,7 @@ def create_recipe():
 
 @app.route('/recipes', methods=['GET'])
 def get_all_recipes():
-    recipes = Recipe.query.order_by(Recipe.name).all()  # Order by recipe name
+    recipes = Recipe.query.order_by(Recipe.id).all()  # Order by recipe name
     return render_template('recipes.html', recipes=recipes)
 
 
@@ -64,6 +64,19 @@ def add_ingredient(recipe_id):
     db.session.add(new_ingredient)
     db.session.commit()
     return jsonify({'message': 'Ingredient added successfully!'})
+
+@app.route('/search', methods=['GET'])
+def search():
+    ingredient_name = request.args.get('ingredient')
+    
+    if ingredient_name:
+        # Query the ingredients table to find all recipes containing the ingredient
+        recipes = db.session.query(Recipe).join(Ingredient).filter(Ingredient.name.ilike(f"%{ingredient_name}%")).all()
+        
+        # Render the result to a template
+        return render_template('search_results.html', recipes=recipes, search_term=ingredient_name)
+    
+    return render_template('search.html', recipes=[], search_term=ingredient_name)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Finder - Search Results</title>
+</head>
+<body>
+    <h1>Search Results for Ingredient: "{{ ingredient }}"</h1>
+    
+    {% if recipes %}
+        <ul>
+            {% for recipe in recipes %}
+                <li>
+                    <h2>{{ recipe.name }}</h2>
+                    <p>{{ recipe.description }}</p>
+                    <p>Preparation Time: {{ recipe.prep_time }} minutes</p>
+                    <h3>Ingredients:</h3>
+                    <ul>
+                        {% for ingredient in recipe.ingredients %}
+                            <li>{{ ingredient.name }}</li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No recipes found with the ingredient "{{ ingredient }}".</p>
+    {% endif %}
+
+    <a href="/search">Go back to search</a>
+</body>
+</html>
