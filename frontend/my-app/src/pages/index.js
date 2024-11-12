@@ -74,6 +74,12 @@ export default function Home() {
                 View All Recipes
               </Link>
             
+              <Link 
+                href="/my-fridge"
+                className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
+              >
+                My Fridge
+              </Link>
            
               <Link 
                 href="/menus"
