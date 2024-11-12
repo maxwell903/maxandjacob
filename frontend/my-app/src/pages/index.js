@@ -1,3 +1,4 @@
+// pages/index.js
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -17,7 +18,7 @@ export default function Home() {
           throw new Error('Failed to fetch data');
         }
         const data = await response.json();
-        console.log('Fetched data:', data); // Debug log
+        console.log('Fetched data:', data);
         setHomeData(data);
       } catch (error) {
         console.error('Error:', error);
@@ -66,21 +67,19 @@ export default function Home() {
               >
                 Add New Recipe +
               </Link>
-              {/* Add this new button */}
               <Link 
                 href="/all-recipes"
                 className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
               >
                 View All Recipes
               </Link>
-            
-              <Link 
+              {/* Add this new button */}
+              <Link
                 href="/my-fridge"
                 className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
               >
                 My Fridge
               </Link>
-           
               <Link 
                 href="/menus"
                 className="inline-block rounded-lg bg-orange-600 px-6 py-3 text-white hover:bg-orange-700 transition-colors duration-200"

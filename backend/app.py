@@ -1,11 +1,14 @@
+# app.py
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_cors import CORS  # Add this import
+from flask_cors import CORS
 from datetime import datetime
 from sqlalchemy import text
+from fuzzywuzzy import fuzz
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS
+CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:RecipePassword123!@localhost/recipe_finder'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -13,7 +16,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# Your existing models...
 class Recipe(db.Model):
    id = db.Column(db.Integer, primary_key=True)
    name = db.Column(db.String(100), nullable=False)
@@ -40,7 +42,12 @@ class MenuRecipe(db.Model):
     menu = db.relationship('Menu', backref=db.backref('menu_recipes', lazy=True))
     recipe = db.relationship('Recipe', backref=db.backref('menu_recipes', lazy=True))
 
-# Add this new endpoint for getting a single recipe
+class FridgeItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit = db.Column(db.String(20))
+
 @app.route('/api/recipe/<int:recipe_id>')
 def get_recipe(recipe_id):
    try:
@@ -60,7 +67,6 @@ def get_recipe(recipe_id):
        print(f"Recipe detail error: {str(e)}")
        return jsonify({'error': str(e)}), 500
 
-# Updated routes
 @app.route('/api/home-data')
 def home_data():
    try:
@@ -88,10 +94,10 @@ def home_data():
    
 @app.route('/api/all-recipes')
 def get_all_recipes():
-    print("Hitting all-recipes endpoint")  # Add this
+    print("Hitting all-recipes endpoint") 
     try:
         recipes = Recipe.query.order_by(Recipe.id.asc()).all()
-        print(f"Found {len(recipes)} recipes")  # Add this
+        print(f"Found {len(recipes)} recipes")
         recipes_data = [{
             'id': recipe.id,
             'name': recipe.name,
@@ -116,7 +122,6 @@ def search():
     ingredients = request.args.getlist('ingredient')
     try:
         if ingredients:
-            # Build subquery for counting matched ingredients
             subquery = """
                 SELECT r.id, r.name, r.description, r.instructions, r.prep_time,
                        COUNT(DISTINCT i.id) as matched_count
@@ -127,16 +132,13 @@ def search():
                 HAVING matched_count = :ingredient_count
             """
             
-            # Create pattern for matching any of the ingredients
             ingredient_pattern = '|'.join(ingredients)
             
-            # Execute query
             recipes = db.session.execute(text(subquery), {
                 'ingredient_pattern': ingredient_pattern,
                 'ingredient_count': len(ingredients)
             }).all()
             
-            # Format results
             recipes_data = [{
                 'id': recipe.id,
                 'name': recipe.name,
@@ -151,7 +153,6 @@ def search():
                 'count': len(recipes_data)
             })
         else:
-            # Return empty results if no ingredients specified
             return jsonify({
                 'results': [],
                 'count': 0
@@ -169,7 +170,6 @@ def add_recipe():
     try:
         data = request.json
         
-        # Create new recipe
         new_recipe = Recipe(
             name=data['name'],
             description=data['description'],
@@ -177,9 +177,8 @@ def add_recipe():
             prep_time=int(data['prep_time'])
         )
         db.session.add(new_recipe)
-        db.session.flush()  # This gets us the new recipe ID
+        db.session.flush()
         
-        # Add ingredients
         for ingredient_name in data['ingredients']:
             ingredient = Ingredient(
                 name=ingredient_name,
@@ -199,7 +198,6 @@ def add_recipe():
         print(f"Error adding recipe: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
-# Add these new routes at the bottom of app.py before if __name__ == '__main__':
 @app.route('/api/menus', methods=['GET'])
 def get_menus():
     try:
@@ -253,7 +251,6 @@ def add_recipe_to_menu(menu_id):
         data = request.json
         recipe_id = data['recipe_id']
         
-        # Check if recipe is already in menu
         existing = MenuRecipe.query.filter_by(
             menu_id=menu_id, 
             recipe_id=recipe_id
@@ -285,8 +282,111 @@ def remove_recipe_from_menu(menu_id, recipe_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
+
+@app.route('/api/fridge/add', methods=['POST'])
+def add_fridge_item():
+    try:
+        data = request.json
+        new_item = FridgeItem(
+            name=data['name'],
+            quantity=data['quantity'], 
+            unit=data['unit'] if 'unit' in data else None
+        )
+        db.session.add(new_item)
+        db.session.commit()
+        return jsonify({'message': 'Item added to fridge'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fridge/parse-receipt', methods=['POST'])
+def parse_receipt():
+    try:
+        data = request.json
+        receipt_text = data['receipt_text'].lower()
+        # Split on common delimiters
+        words = ' '.join(receipt_text.split('\n')).split()  
+        matched_items = {}
+        unmatched_items = set()  # Track unmatched items for feedback
+
+        # Get all unique ingredients from database for matching
+        ingredients = db.session.query(Ingredient.name).distinct().all()
+        ingredient_names = {i[0].lower() for i in ingredients}
+        
+        # Get existing fridge items
+        existing_items = {item.name.lower(): item for item in FridgeItem.query.all()}
+
+        # First pass: find exact matches
+        for word in words:
+            if word in ingredient_names:
+                matched_items[word] = matched_items.get(word, 0) + 1
+            else:
+                unmatched_items.add(word)
+
+        # Second pass: check for partial matches in remaining unmatched items
+        for word in list(unmatched_items):  # Convert to list as we'll modify the set
+            for ing_name in ingredient_names:
+                # If ingredient name is found within the unmatched word
+                if ing_name in word:
+                    matched_items[ing_name] = matched_items.get(ing_name, 0) + 1
+                    unmatched_items.remove(word)
+                    break
+
+        # Update database with matches
+        results = []
+        for ingredient, quantity in matched_items.items():
+            if ingredient in existing_items:
+                # Update existing item
+                existing_items[ingredient].quantity += quantity
+                results.append({
+                    'matched_ingredient': ingredient,
+                    'quantity': quantity,
+                    'action': 'updated',
+                    'current_total': existing_items[ingredient].quantity
+                })
+            else:
+                # Add new item
+                fridge_item = FridgeItem(
+                    name=ingredient,
+                    quantity=quantity
+                )
+                db.session.add(fridge_item)
+                results.append({
+                    'matched_ingredient': ingredient,
+                    'quantity': quantity,
+                    'action': 'added',
+                    'current_total': quantity
+                })
+
+        db.session.commit()
+        return jsonify({
+            'matched_items': results,
+            'unmatched_items': list(unmatched_items),  # Return unmatched for feedback
+            'total_matches': len(results)
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in parse_receipt: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fridge')
+def get_fridge_items():
+    try:
+        items = FridgeItem.query.all()
+        return jsonify({
+            'ingredients': [{
+                'id': item.id,
+                'name': item.name,
+                'quantity': item.quantity,
+                'unit': item.unit
+            } for item in items]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
    with app.app_context():
        db.create_all()
    app.run(debug=True, port=5000)
-
