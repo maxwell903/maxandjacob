@@ -53,12 +53,33 @@ export default function Home() {
               Total Recipes: {homeData.total_recipes}
             </p>
             
-            <div className="mb-8">
+            <div className="flex justify-center gap-4">
               <Link 
                 href="/search"
                 className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
               >
                 Search Recipes by Ingredients →
+              </Link>
+              <Link 
+                href="/add-recipe"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
+              >
+                Add New Recipe +
+              </Link>
+              {/* Add this new button */}
+              <Link 
+                href="/all-recipes"
+                className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
+              >
+                View All Recipes
+              </Link>
+            
+           
+              <Link 
+                href="/menus"
+                className="inline-block rounded-lg bg-orange-600 px-6 py-3 text-white hover:bg-orange-700 transition-colors duration-200"
+              >
+                My Menus
               </Link>
             </div>
 
@@ -76,16 +97,22 @@ export default function Home() {
           <h2 className="mb-8 text-2xl font-bold text-gray-900">Latest Recipes</h2>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {homeData.latest_recipes.map((recipe) => (
-              <div 
+              <Link 
+                href={`/recipe/${recipe.id}`} 
                 key={recipe.id}
-                className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl"
+                className="block no-underline"
               >
-                <h3 className="mb-2 text-lg font-semibold">{recipe.name}</h3>
-                <p className="mb-4 text-gray-600">{recipe.description}</p>
-                <p className="text-sm text-gray-500">
-                  Prep time: {recipe.prep_time} mins
-                </p>
-              </div>
+                <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+                  <h3 className="mb-2 text-lg font-semibold text-gray-900">{recipe.name}</h3>
+                  <p className="mb-4 text-gray-600">{recipe.description}</p>
+                  <p className="text-sm text-gray-500">
+                    Prep time: {recipe.prep_time} mins
+                  </p>
+                  <div className="mt-4 text-blue-600 hover:text-blue-700">
+                    View Recipe →
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
