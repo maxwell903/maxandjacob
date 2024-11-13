@@ -1,3 +1,4 @@
+// src/pages/recipe/[id].js
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
@@ -14,15 +15,35 @@ export default function RecipePage() {
   const [addingToMenu, setAddingToMenu] = useState(false);
 
   useEffect(() => {
+    const actualPrevPath = localStorage.getItem('actualPreviousPath');
+    const lastPath = localStorage.getItem('lastPath');
+    
+    if (actualPrevPath) {
+      setBackPath(actualPrevPath);
+    } else if (lastPath) {
+      setBackPath(lastPath);
+    } else {
+      setBackPath('/');
+    }
+  }, []);
+
+  useEffect(() => {
     if (id) {
       Promise.all([fetchRecipe(), fetchMenus()]);
     }
   }, [id]);
 
   useEffect(() => {
-    const prevPath = localStorage.getItem('previousPath');
-    if (prevPath) {
-      setBackPath(prevPath);
+    // Check for actual previous path first
+    const actualPrevPath = localStorage.getItem('actualPreviousPath');
+    const lastPath = localStorage.getItem('lastPath');
+    
+    if (actualPrevPath && actualPrevPath.startsWith('/menu/')) {
+      setBackPath(actualPrevPath);
+    } else if (lastPath) {
+      setBackPath(lastPath);
+    } else {
+      setBackPath('/');
     }
   }, []);
 
@@ -60,8 +81,6 @@ export default function RecipePage() {
       });
 
       if (!response.ok) throw new Error('Failed to add recipe to menu');
-      
-      // Show success feedback (you could add a toast notification here)
       setShowMenuDropdown(false);
     } catch (error) {
       setError(error.message);
@@ -103,16 +122,17 @@ export default function RecipePage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="mx-auto max-w-3xl px-4">
-        <Link 
-          href={backPath}
-          className="mb-8 inline-block text-blue-600 hover:text-blue-700"
-        >
-          ← Back to {backPath === '/menus' ? 'Menus' : 
-             backPath === '/search' ? 'Search' :
-             backPath === '/' ? 'Home' : 'Previous Page'}
-        </Link>
+      <Link 
+  href={backPath}
+  className="mb-8 inline-block text-blue-600 hover:text-blue-700"
+>
+  ← Back to {backPath === '/menus' ? 'Menus' : 
+             backPath === '/search' ? 'Search' : 
+             'Previous Page'}
+</Link>
         
         <div className="rounded-lg bg-white p-8 shadow-lg">
+          {/* Rest of your JSX remains the same */}
           <div className="flex justify-between items-start mb-6">
             <h1 className="text-3xl font-bold">{recipe.name}</h1>
             

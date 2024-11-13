@@ -1,5 +1,6 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 export default function InventoryView() {
   const [recipes, setRecipes] = useState([]);
@@ -15,6 +16,7 @@ export default function InventoryView() {
   const [newItem, setNewItem] = useState({ name: '', quantity: '', unit: '' });
   const [processingResults, setProcessingResults] = useState(null);
   const [inventoryFilter, setInventoryFilter] = useState('inStock');
+  const router = useRouter();
 
   useEffect(() => {
     Promise.all([
@@ -58,7 +60,6 @@ export default function InventoryView() {
       const data = await response.json();
       if (response.ok) {
         setProcessingResults(data);
-        // Refresh fridge items
         const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
         const fridgeData = await fridgeResponse.json();
         setFridgeItems(fridgeData.ingredients);
@@ -122,20 +123,23 @@ export default function InventoryView() {
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <button 
-            onClick={() => window.history.back()}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            ← Back to My Fridge
-          </button>
-        </div>
-      </nav>
+  <div className="max-w-6xl mx-auto px-4 py-4">
+    <Link 
+      href="/"
+      className="text-blue-600 hover:text-blue-800"
+      onClick={() => {
+        const prevPath = localStorage.getItem('previousPath') || '/';
+        router.push(prevPath);
+      }}
+    >
+      ← Back
+    </Link>
+  </div>
+</nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Inventory Management</h1>
 
-        {/* View Selection */}
         <div className="mb-6 flex gap-4">
           <button
             onClick={() => setViewMode('inventory')}
@@ -169,7 +173,6 @@ export default function InventoryView() {
           </button>
         </div>
 
-        {/* Add Inventory Section */}
         <div className="mb-8 bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">Add to Inventory</h2>
           <div className="mb-4 flex gap-4">
@@ -230,7 +233,10 @@ export default function InventoryView() {
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
                 />
               </div>
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+              <button 
+                type="submit" 
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+              >
                 Add Item
               </button>
             </form>
@@ -292,7 +298,6 @@ export default function InventoryView() {
           )}
         </div>
 
-        {/* Conditional View Rendering */}
         {viewMode === 'inventory' ? (
           <div className="mb-8">
             <div className="mb-4 flex gap-4">
@@ -323,22 +328,69 @@ export default function InventoryView() {
             </div>
 
             <div className="bg-white rounded-lg shadow">
-              <div className="grid grid-cols-4 gap-4 p-4 font-medium text-gray-700 border-b">
+              <div className="grid grid-cols-5 gap-4 p-4 font-medium text-gray-700 border-b">
                 <div>Item Name</div>
                 <div>Quantity</div>
                 <div>Unit</div>
                 <div>Status</div>
+                <div>Actions</div>
               </div>
               {getFilteredInventory().map((item, index) => (
                 <div 
                   key={item.id || index} 
-                  className={`grid grid-cols-4 gap-4 p-4 border-b ${
+                  className={`grid grid-cols-5 gap-4 p-4 border-b ${
                     index % 2 === 0 ? 'bg-gray-50' : 'bg-white'
                   }`}
                 >
                   <div>{item.name}</div>
-                  <div>{item.quantity}</div>
-                  <div>{item.unit || '-'}</div>
+                  <div>
+                    <input
+                      type="number"
+                      value={item.quantity}
+                      onChange={async (e) => {
+                        const newQuantity = e.target.value;
+                        try {
+                          const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...item, quantity: newQuantity })
+                          });
+                          if (response.ok) {
+                            const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
+                            const fridgeData = await fridgeResponse.json();
+                            setFridgeItems(fridgeData.ingredients);
+                          }
+                        } catch (error) {
+                          console.error('Error updating quantity:', error);
+                        }
+                      }}
+                      className="w-20 rounded border px-2 py-1"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={item.unit || ''}
+                      onChange={async (e) => {
+                        const newUnit = e.target.value;
+                        try {
+                          const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...item, unit: newUnit })
+                          });
+                          if (response.ok) {
+                            const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
+                            const fridgeData = await fridgeResponse.json();
+                            setFridgeItems(fridgeData.ingredients);
+                          }
+                        } catch (error) {
+                          console.error('Error updating unit:', error);
+                        }
+                      }}
+                      className="w-20 rounded border px-2 py-1"
+                    />
+                  </div>
                   <div>
                     <span className={`px-2 py-1 rounded-full text-sm ${
                       item.quantity > 0 
@@ -347,6 +399,45 @@ export default function InventoryView() {
                     }`}>
                       {item.quantity > 0 ? 'In Stock' : 'Out of Stock'}
                     </span>
+                  </div>
+                  <div>
+                  
+                  <button
+  onClick={async () => {
+    if (confirm('Are you sure you want to mark this item as out of stock?')) {
+      try {
+        // First try updating quantity directly using existing endpoint
+        const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ...item,
+            quantity: 0
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Refresh the fridge items
+        const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
+        const fridgeData = await fridgeResponse.json();
+        setFridgeItems(fridgeData.ingredients);
+      } catch (error) {
+        console.error('Error updating item:', error);
+        alert('Failed to mark item as out of stock. Please try again.');
+      }
+    }
+  }}
+  className="text-red-600 hover:text-red-800 font-medium"
+>
+  Mark Out of Stock
+</button>
+
+                    
                   </div>
                 </div>
               ))}
@@ -380,37 +471,36 @@ export default function InventoryView() {
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredRecipes.map(recipe => (
-                 <div key={recipe.id} className="bg-white rounded-lg shadow-lg p-6">
-                 <h3 className="text-xl font-semibold mb-4">{recipe.name}</h3>
-                 <p className="text-gray-600 mb-4">{recipe.description}</p>
-                 <div className="space-y-2">
-                   <h4 className="font-medium">Required Ingredients:</h4>
-                   {recipe.ingredients.map((ingredient, idx) => (
-                     <div
-                       key={idx}
-                       className={`p-2 rounded ${
-                         checkIngredientStatus(ingredient)
-                           ? 'bg-green-100 text-green-800'
-                           : 'bg-red-100 text-red-800'
-                       }`}
-                     >
-                       {ingredient}
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             ))}
-           </div>
-         </>
-       )}
+                <div key={recipe.id} className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-xl font-semibold mb-4">{recipe.name}</h3>
+                  <p className="text-gray-600 mb-4">{recipe.description}</p>
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Required Ingredients:</h4>
+                    {recipe.ingredients.map((ingredient, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded ${
+                          checkIngredientStatus(ingredient)
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {ingredient}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
-       {loading && (
-         <div className="text-center py-8">
-           <p>Loading...</p>
-         </div>
-       )}
-     </div>
-   </div>
- );
+        {loading && (
+          <div className="text-center py-8">
+            <p>Loading...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
-                

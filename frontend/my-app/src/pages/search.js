@@ -116,51 +116,56 @@ export default function Search() {
             {error}
           </div>
         )}
-        {searchResults && (
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Found Recipes ({searchResults.count})
-            </h2>
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {searchResults.results.map((recipe) => (
-                <Link 
-                  href={`/recipe/${recipe.id}`}
-                  key={recipe.id}
-                  className="block no-underline"
-                  onClick={() => localStorage.setItem('previousPath', '/all-recipes')}  // Add this line
-                >
-                  <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                    <h3 className="mb-2 text-lg font-semibold">{recipe.name}</h3>
-                    <p className="mb-4 text-gray-600">{recipe.description}</p>
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Ingredients:</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {recipe.ingredients.map((ingredient, index) => (
-                          <span
-                            key={index}
-                            className={`text-sm px-2 py-1 rounded-full ${
-                              selectedIngredients.includes(ingredient)
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            {ingredient}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      Prep time: {recipe.prep_time} mins
-                    </p>
-                    <div className="mt-4 text-blue-600 hover:text-blue-700">
-                      View Recipe →
-                    </div>
-                  </div>
-                </Link>
-              ))}
+        // In the search results section where you map over searchResults.results
+{searchResults && (
+  <div>
+    <h2 className="text-2xl font-bold text-gray-900 mb-6">
+      Found Recipes ({searchResults.count})
+    </h2>
+    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      {searchResults.results.map((recipe) => (
+        <Link 
+        href={`/recipe/${recipe.id}`}
+        key={recipe.id}
+        className="block no-underline"
+        onClick={() => {
+          localStorage.setItem('actualPreviousPath', '/search');
+          localStorage.setItem('lastPath', '/search');
+        }}
+      
+        >
+          <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+            <h3 className="mb-2 text-lg font-semibold">{recipe.name}</h3>
+            <p className="mb-4 text-gray-600">{recipe.description}</p>
+            <div className="mb-4">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Ingredients:</h4>
+              <div className="flex flex-wrap gap-1">
+                {recipe.ingredients.map((ingredient, index) => (
+                  <span
+                    key={index}
+                    className={`text-sm px-2 py-1 rounded-full ${
+                      selectedIngredients.includes(ingredient)
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {ingredient}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Prep time: {recipe.prep_time} mins
+            </p>
+            <div className="mt-4 text-blue-600 hover:text-blue-700">
+              View Recipe →
             </div>
           </div>
-        )}  
+        </Link>
+      ))}
+    </div>
+  </div>
+)}
       </div>
     </div>
   );

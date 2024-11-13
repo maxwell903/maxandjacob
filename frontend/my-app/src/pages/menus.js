@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 export default function Menus() {
   const [menus, setMenus] = useState([]);
@@ -8,10 +9,26 @@ export default function Menus() {
   const [newMenuName, setNewMenuName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showGroceryListModal, setShowGroceryListModal] = useState(false);
+  const [selectedMenuId, setSelectedMenuId] = useState(null);
+  const [groceryLists, setGroceryLists] = useState([]);
+  const [fridgeItems, setFridgeItems] = useState([]);
+  const router = useRouter();
 
   useEffect(() => {
     fetchMenus();
+    fetchFridgeItems();
   }, []);
+
+  const fetchFridgeItems = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/fridge');
+      const data = await response.json();
+      setFridgeItems(data.ingredients || []);
+    } catch (error) {
+      console.error('Error fetching fridge items:', error);
+    }
+  };
 
   const fetchMenus = async () => {
     try {
@@ -42,6 +59,61 @@ export default function Menus() {
       fetchMenus();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleShowModal = async (menuId) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/grocery-lists');
+      const data = await response.json();
+      setGroceryLists(data.lists);
+      setSelectedMenuId(menuId);
+      setShowGroceryListModal(true);
+    } catch (error) {
+      console.error('Error fetching grocery lists:', error);
+    }
+  };
+
+  const addToGroceryList = async (listId) => {
+    try {
+      // First fetch all recipes for this menu
+      const menuResponse = await fetch(`http://localhost:5000/api/menus/${selectedMenuId}/recipes`);
+      const menuData = await menuResponse.json();
+      
+      // Create formatted items for the grocery list
+      for (const recipe of menuData.recipes) {
+        // Add recipe name
+        await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: `**${recipe.name}**` }),
+        });
+        
+        // Add ingredients with color indicators
+        for (const ingredient of recipe.ingredients) {
+          const inFridge = fridgeItems.some(item => 
+            item.name.toLowerCase() === ingredient.toLowerCase() && item.quantity > 0
+          );
+          
+          const color = inFridge ? 'text-green-600' : 'text-red-600';
+          await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              name: `<span class="${color}">  • ${ingredient}</span>` 
+            }),
+          });
+        }
+      }
+
+      setShowGroceryListModal(false);
+      router.push('/grocerylistId');
+    } catch (error) {
+      console.error('Error adding menu to grocery list:', error);
     }
   };
 
@@ -119,25 +191,68 @@ export default function Menus() {
 
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {menus.map((menu) => (
-            <Link
-              href={`/menu/${menu.id}`}
-              key={menu.id}
-              className="block no-underline"
-            >
-              <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                  {menu.name}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  {menu.recipe_count} {menu.recipe_count === 1 ? 'recipe' : 'recipes'}
-                </p>
-                <div className="mt-4 text-blue-600 hover:text-blue-700">
-                  View Menu →
+            <div key={menu.id} className="relative">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleShowModal(menu.id);
+                }}
+                className="absolute top-4 right-4 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center hover:bg-green-700 transition-colors z-10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <Link
+                href={`/menu/${menu.id}`}
+                className="block no-underline"
+                onClick={() => {
+                  localStorage.setItem('actualPreviousPath', `/menus`);
+                  localStorage.setItem('lastPath', `/menus`);
+                }}
+              >
+                <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+                  <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                    {menu.name}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {menu.recipe_count} {menu.recipe_count === 1 ? 'recipe' : 'recipes'}
+                  </p>
+                  <div className="mt-4 text-blue-600 hover:text-blue-700">
+                    View Menu →
+                  </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+            </div>
           ))}
         </div>
+
+        {showGroceryListModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+              <h3 className="text-lg font-semibold mb-4">Select Grocery List</h3>
+              <div className="space-y-2">
+                {groceryLists.map((list) => (
+                  <button
+                    key={list.id}
+                    onClick={() => addToGroceryList(list.id)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+                  >
+                    {list.name}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setShowGroceryListModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

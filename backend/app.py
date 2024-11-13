@@ -48,6 +48,19 @@ class FridgeItem(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     unit = db.Column(db.String(20))
 
+# Add to your existing models in app.py
+
+class GroceryList(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class GroceryItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    list_id = db.Column(db.Integer, db.ForeignKey('grocery_list.id'), nullable=False)
+    grocery_list = db.relationship('GroceryList', backref=db.backref('items', lazy=True))
+
 @app.route('/api/recipe/<int:recipe_id>')
 def get_recipe(recipe_id):
    try:
@@ -384,6 +397,166 @@ def get_fridge_items():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/grocery-lists', methods=['GET'])
+def get_grocery_lists():
+    try:
+        lists = GroceryList.query.all()
+        return jsonify({
+            'lists': [{
+                'id': list.id,
+                'name': list.name,
+                'items': [{
+                    'id': item.id,
+                    'name': item.name
+                } for item in list.items]
+            } for list in lists]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/grocery-lists', methods=['POST'])
+def create_grocery_list():
+    try:
+        data = request.json
+        new_list = GroceryList(name=data['name'])
+        db.session.add(new_list)
+        db.session.commit()
+        
+        for item_name in data['items']:
+            item = GroceryItem(name=item_name, list_id=new_list.id)
+            db.session.add(item)
+        
+        db.session.commit()
+        return jsonify({'message': 'Grocery list created', 'id': new_list.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/fridge/<int:item_id>', methods=['DELETE'])
+def delete_fridge_item(item_id):
+    try:
+        item = FridgeItem.query.get_or_404(item_id)
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({'message': 'Item deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fridge/<int:item_id>', methods=['PUT'])
+def update_fridge_item(item_id):
+    try:
+        item = FridgeItem.query.get_or_404(item_id)
+        data = request.json
+        if 'quantity' in data:
+            item.quantity = data['quantity']
+        if 'unit' in data:
+            item.unit = data['unit']
+        db.session.commit()
+        return jsonify({
+            'id': item.id,
+            'name': item.name,
+            'quantity': item.quantity,
+            'unit': item.unit
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/grocery-lists/<int:list_id>', methods=['PUT'])
+def update_grocery_list(list_id):
+    try:
+        data = request.json
+        grocery_list = GroceryList.query.get_or_404(list_id)
+        grocery_list.name = data['name']
+        db.session.commit()
+        return jsonify({'message': 'Grocery list updated'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/grocery-lists/<int:list_id>', methods=['DELETE'])
+def delete_grocery_list(list_id):
+    try:
+        # First delete all items associated with the list
+        GroceryItem.query.filter_by(list_id=list_id).delete()
+        
+        # Then delete the list itself
+        grocery_list = GroceryList.query.get_or_404(list_id)
+        db.session.delete(grocery_list)
+        db.session.commit()
+        
+        return jsonify({'message': 'Grocery list deleted'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting grocery list: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/grocery-lists/<int:list_id>/items', methods=['POST'])
+def add_grocery_item(list_id):
+    try:
+        data = request.json
+        new_item = GroceryItem(name=data['name'], list_id=list_id)
+        db.session.add(new_item)
+        db.session.commit()
+        return jsonify({'message': 'Grocery item added'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/grocery-lists/<int:list_id>/items/<int:item_id>', methods=['PUT'])
+def update_grocery_item(list_id, item_id):
+    try:
+        data = request.json
+        item = GroceryItem.query.get_or_404(item_id)
+        if item.list_id != list_id:
+            return jsonify({'error': 'Item not found in the specified list'}), 404
+        item.name = data['name']
+        db.session.commit()
+        return jsonify({'message': 'Grocery item updated'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+    
+    # In app.py - make sure this route exists
+@app.route('/api/fridge/<int:item_id>/zero', methods=['PUT'])
+def zero_fridge_item(item_id):
+    print(f"Received request to zero item {item_id}")  # Debug log
+    try:
+        item = FridgeItem.query.get_or_404(item_id)
+        item.quantity = 0
+        db.session.commit()
+        print(f"Successfully zeroed item {item_id}")  # Debug log
+        return jsonify({
+            'id': item.id,
+            'name': item.name,
+            'quantity': item.quantity,
+            'unit': item.unit
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error zeroing item {item_id}: {str(e)}")  # Debug log
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/grocery-lists/<int:list_id>/items', methods=['POST'])
+def add_item_to_list(list_id):
+    try:
+        data = request.json
+        new_item = GroceryItem(
+            name=data['name'],
+            list_id=list_id
+        )
+        db.session.add(new_item)
+        db.session.commit()
+        return jsonify({'message': 'Item added successfully', 'id': new_item.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+
 
 
 if __name__ == '__main__':

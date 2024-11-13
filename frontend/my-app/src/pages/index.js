@@ -1,14 +1,17 @@
 // pages/index.js
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';  // Add this with other imports at top
 
 export default function Home() {
+  const router = useRouter();  // Add this as first line inside component
   const [homeData, setHomeData] = useState({
     total_recipes: 0,
     latest_recipes: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,26 +63,40 @@ export default function Home() {
                 className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
               >
                 Search Recipes by Ingredients →
-              </Link>
+              </Link>\
+
               <Link 
-                href="/add-recipe"
-                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
-              >
-                Add New Recipe +
-              </Link>
+  href="/add-recipe"
+  className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
+  onClick={() => localStorage.setItem('previousPath', '/')}
+>
+  Add New Recipe
+</Link>
+
               <Link 
                 href="/all-recipes"
                 className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
               >
                 View All Recipes
               </Link>
-              {/* Add this new button */}
-              <Link
-                href="/my-fridge"
-                className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
-              >
-                My Fridge
-              </Link>
+
+              <Link 
+  href="/my-fridge"
+  className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
+  onClick={() => localStorage.setItem('previousPath', '/')}
+>
+  My Fridge
+</Link>
+
+              
+<Link
+  href="/grocerylistId"
+  className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
+  onClick={() => localStorage.setItem('previousPath', '/')}
+>
+  Grocery Lists
+</Link>
+
               <Link 
                 href="/menus"
                 className="inline-block rounded-lg bg-orange-600 px-6 py-3 text-white hover:bg-orange-700 transition-colors duration-200"
@@ -101,25 +118,29 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4">
           <h2 className="mb-8 text-2xl font-bold text-gray-900">Latest Recipes</h2>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {homeData.latest_recipes.map((recipe) => (
-              <Link 
-                href={`/recipe/${recipe.id}`} 
-                key={recipe.id}
-                className="block no-underline"
-              >
-                <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                  <h3 className="mb-2 text-lg font-semibold text-gray-900">{recipe.name}</h3>
-                  <p className="mb-4 text-gray-600">{recipe.description}</p>
-                  <p className="text-sm text-gray-500">
-                    Prep time: {recipe.prep_time} mins
-                  </p>
-                  <div className="mt-4 text-blue-600 hover:text-blue-700">
-                    View Recipe →
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+  {homeData.latest_recipes.map((recipe) => (
+    <Link 
+    href={`/recipe/${recipe.id}`}
+    key={recipe.id}
+    className="block no-underline"
+    onClick={() => {
+      localStorage.setItem('actualPreviousPath', '/');
+      localStorage.setItem('lastPath', '/');
+    }}
+  >
+      <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+        <h3 className="mb-2 text-lg font-semibold text-gray-900">{recipe.name}</h3>
+        <p className="mb-4 text-gray-600">{recipe.description}</p>
+        <p className="text-sm text-gray-500">
+          Prep time: {recipe.prep_time} mins
+        </p>
+        <div className="mt-4 text-blue-600 hover:text-blue-700">
+          View Recipe →
+        </div>
+      </div>
+    </Link>
+  ))}
+</div>
         </div>
       </div>
     </div>

@@ -6,7 +6,9 @@ import { useRouter } from 'next/router';
 
 const AddRecipe = () => {  // Changed to arrow function
   const router = useRouter();
+  const [backPath, setBackPath] = useState('/');
   const [recipe, setRecipe] = useState({
+  
     name: '',
     description: '',
     instructions: '',
@@ -60,15 +62,26 @@ const AddRecipe = () => {  // Changed to arrow function
     }
   };
 
+  useEffect(() => {
+    const prevPath = localStorage.getItem('previousPath') || '/';
+    setBackPath(prevPath);
+  }, []);
+  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <Link href="/" className="text-blue-600 hover:text-blue-800">
-            ← Back to Home
-          </Link>
-        </div>
-      </nav>
+  <div className="max-w-6xl mx-auto px-4 py-4">
+    <Link 
+      href={backPath}
+      className="text-blue-600 hover:text-blue-800"
+    >
+      ← Back to {backPath === "/" ? "Home" : 
+                 backPath === "/search" ? "Search" : 
+                 backPath === "/menus" ? "Menus" : "Previous Page"}
+    </Link>
+  </div>
+</nav>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Add New Recipe</h1>
