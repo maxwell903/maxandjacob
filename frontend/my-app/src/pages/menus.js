@@ -14,6 +14,8 @@ export default function Menus() {
   const [groceryLists, setGroceryLists] = useState([]);
   const [fridgeItems, setFridgeItems] = useState([]);
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
+
 
   useEffect(() => {
     fetchMenus();
@@ -117,6 +119,46 @@ export default function Menus() {
     }
   };
 
+  const handleDeleteMenu = async (menuId) => {
+    if (!menuId) {
+      console.error('No menu ID provided');
+      return;
+    }
+  
+    if (confirm('Are you sure you want to delete this Menu?')) {
+      try {
+        setIsDeleting(true);
+        console.log('Attempting to delete menu:', menuId); // Debug log
+  
+        const response = await fetch(`http://localhost:5000/api/menus/${menuId}`, {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          },
+          mode: 'cors',
+          credentials: 'same-origin'
+        });
+  
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete menu');
+        }
+  
+        console.log('Menu deleted successfully'); // Debug log
+  
+        // Refresh the menus list
+        await fetchMenus();
+      } catch (error) {
+        console.error('Error deleting menu:', error);
+        setError('Failed to delete menu: ' + error.message);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -190,41 +232,56 @@ export default function Menus() {
         )}
 
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {menus.map((menu) => (
-            <div key={menu.id} className="relative">
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleShowModal(menu.id);
-                }}
-                className="absolute top-4 right-4 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center hover:bg-green-700 transition-colors z-10"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <Link
-                href={`/menu/${menu.id}`}
-                className="block no-underline"
-                onClick={() => {
-                  localStorage.setItem('actualPreviousPath', `/menus`);
-                  localStorage.setItem('lastPath', `/menus`);
-                }}
-              >
-                <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                  <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                    {menu.name}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {menu.recipe_count} {menu.recipe_count === 1 ? 'recipe' : 'recipes'}
-                  </p>
-                  <div className="mt-4 text-blue-600 hover:text-blue-700">
-                    View Menu →
-                  </div>
-                </div>
-              </Link>
-            </div>
-          ))}
+        {menus.map((menu) => (
+  <div key={menu.id} className="relative">
+    <div className="absolute top-4 right-4 flex gap-2 z-10">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDeleteMenu(menu.id);
+        }}
+        className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+        </svg>
+      </button>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleShowModal(menu.id);
+        }}
+        className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center hover:bg-green-700 transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+        </svg>
+      </button>
+    </div>
+    <Link
+      href={`/menu/${menu.id}`}
+      className="block no-underline"
+      onClick={() => {
+        localStorage.setItem('actualPreviousPath', `/menus`);
+        localStorage.setItem('lastPath', `/menus`);
+      }}
+    >
+      <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+        <h3 className="mb-2 text-lg font-semibold text-gray-900">
+          {menu.name}
+        </h3>
+        <p className="text-sm text-gray-500">
+          {menu.recipe_count} {menu.recipe_count === 1 ? 'recipe' : 'recipes'}
+        </p>
+        <div className="mt-4 text-blue-600 hover:text-blue-700">
+          View Menu →
+        </div>
+      </div>
+    </Link>
+  </div>
+))}
         </div>
 
         {showGroceryListModal && (

@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { jsx } from 'react/jsx-runtime';
 
+
 function GroceryListsPage() {
   const [lists, setLists] = useState([]);
   const [expandedList, setExpandedList] = useState(null);
@@ -17,7 +18,11 @@ function GroceryListsPage() {
   const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [bulkItems, setBulkItems] = useState('');
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [selectedMenu, setSelectedMenu] = useState(null);
+  const [selectedItems, setSelectedItems] = useState(new Set());
   const router = useRouter();
+  
 
   useEffect(() => {
     Promise.all([
@@ -35,9 +40,11 @@ function GroceryListsPage() {
     });
   }, []);
 
+
+
+
   const cleanText = (text) => {
-    // First check for color tags
-    let color = 'text-gray-900'; // default color
+    let color = 'text-gray-900';
     const colorMatch = text.match(/\[(.*?)\]/);
     if (colorMatch) {
       const extractedColor = colorMatch[1];
@@ -52,11 +59,9 @@ function GroceryListsPage() {
           color = 'text-gray-900';
           break;
       }
-      // Remove the color tag from text
       text = text.replace(/\[.*?\]/, '');
     }
   
-    // Clean other formatting but preserve bullet points
     text = text
       .replace(/[*_<>]/g, '')
       .replace(/\{.*?\}/g, '')
@@ -66,21 +71,288 @@ function GroceryListsPage() {
   
     return { text, color };
   };
-  
-  const getItemColor = (itemName) => {
-    const normalizedName = itemName.toLowerCase();
-    if (fridgeItems.some(item => item.name.toLowerCase() === normalizedName && item.quantity > 0)) {
-      return 'text-green-600';
+
+  const handleItemAddManual = async (listId, itemName) => {
+    try {
+      const cleanName = itemName.trim();
+      let colorPrefix = '[black]';
+      
+      const inFridge = fridgeItems.some(item => 
+        item.name.toLowerCase() === cleanName.toLowerCase() && 
+        item.quantity > 0
+      );
+      
+      const inRecipes = ingredients.includes(cleanName.toLowerCase());
+      
+      if (inFridge) {
+        colorPrefix = '[green]';
+      } else if (inRecipes) {
+        colorPrefix = '[red]';
+      }
+
+      const formattedName = `${colorPrefix}• ${cleanName}`;
+
+      const groceryResponse = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: formattedName }),
+      });
+
+      if (!groceryResponse.ok) throw new Error('Failed to add item to grocery list');
+
+      await fetch('http://localhost:5000/api/fridge/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          quantity: 0,
+          unit: ''
+        }),
+      });
+
+      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
+      const listsData = await listsResponse.json();
+      setLists(listsData.lists);
+      
+      setNewItemName('');
+      setShowAddItem(false);
+    } catch (error) {
+      console.error('Error adding item:', error);
     }
-    if (ingredients.includes(normalizedName)) {
-      return 'text-red-600';
+  };
+
+
+
+
+  const handleItemAddFromRecipe = async (listId, recipe) => {
+    try {
+      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: `**${recipe.name}**` 
+        }),
+      });
+
+      for (const ingredient of recipe.ingredients) {
+        const cleanName = ingredient.trim();
+        let colorPrefix = '[black]';
+
+        const inFridge = fridgeItems.some(item => 
+          item.name.toLowerCase() === cleanName.toLowerCase() && 
+          item.quantity > 0
+        );
+        
+        const inRecipes = ingredients.includes(cleanName.toLowerCase());
+        
+        if (inFridge) {
+          colorPrefix = '[green]';
+        } else if (inRecipes) {
+          colorPrefix = '[red]';
+        }
+
+        const formattedName = `${colorPrefix}• ${cleanName}`;
+
+        await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: formattedName }),
+        });
+
+        await fetch('http://localhost:5000/api/fridge/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cleanName,
+            quantity: 0,
+            unit: ''
+          }),
+        });
+      }
+
+      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
+      const listsData = await listsResponse.json();
+      setLists(listsData.lists);
+
+    } catch (error) {
+      console.error('Error adding recipe ingredients:', error);
     }
-    return 'text-gray-900';
+  };
+
+  const handleItemAddFromMenu = async (listId, menuId) => {
+    try {
+      const menuResponse = await fetch(`http://localhost:5000/api/menus/${menuId}/recipes`);
+      const menuData = await menuResponse.json();
+
+      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: `### ${menuData.menu_name} ###`
+        }),
+      });
+
+      for (const recipe of menuData.recipes) {
+        await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            name: `**${recipe.name}**`
+          }),
+        });
+
+        for (const ingredient of recipe.ingredients) {
+          const cleanName = ingredient.trim();
+          let colorPrefix = '[black]';
+
+          const inFridge = fridgeItems.some(item => 
+            item.name.toLowerCase() === cleanName.toLowerCase() && 
+            item.quantity > 0
+          );
+          
+          const inRecipes = ingredients.includes(cleanName.toLowerCase());
+          
+          if (inFridge) {
+            colorPrefix = '[green]';
+          } else if (inRecipes) {
+            colorPrefix = '[red]';
+          }
+
+          const formattedName = `${colorPrefix}• ${cleanName}`;
+
+          await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: formattedName }),
+          });
+
+          await fetch('http://localhost:5000/api/fridge/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: cleanName,
+              quantity: 0,
+              unit: ''
+            }),
+          });
+        }
+      }
+
+      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
+      const listsData = await listsResponse.json();
+      setLists(listsData.lists);
+
+    } catch (error) {
+      console.error('Error adding menu items:', error);
+    }
+  };
+
+
+  const RecipeSelectionModal = ({ listId, onClose }) => {
+    const [recipes, setRecipes] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      fetch('http://localhost:5000/api/all-recipes')
+        .then(res => res.json())
+        .then(data => {
+          setRecipes(data.recipes);
+          setLoading(false);
+        });
+    }, []);
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Select Recipe</h3>
+          {loading ? (
+            <p>Loading recipes...</p>
+          ) : (
+            <div className="space-y-2">
+              {recipes.map((recipe) => (
+                <button
+                  key={recipe.id}
+                  onClick={() => {
+                    handleItemAddFromRecipe(listId, recipe);
+                    onClose();
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+                >
+                  {recipe.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const MenuSelectionModal = ({ listId, onClose }) => {
+    const [menus, setMenus] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      fetch('http://localhost:5000/api/menus')
+        .then(res => res.json())
+        .then(data => {
+          setMenus(data.menus);
+          setLoading(false);
+        });
+    }, []);
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
+          <h3 className="text-lg font-semibold mb-4">Select Menu</h3>
+          {loading ? (
+            <p>Loading menus...</p>
+          ) : (
+            <div className="space-y-2">
+              {menus.map((menu) => (
+                <button
+                  key={menu.id}
+                  onClick={() => {
+                    handleItemAddFromMenu(listId, menu.id);
+                    onClose();
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+                >
+                  {menu.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const toggleList = (listId) => {
     setExpandedList(expandedList === listId ? null : listId);
   };
+
+  useEffect(() => {
+    if (expandedList === null) {
+      setSelectedItems(new Set());
+    }
+  }, [expandedList]);
 
   const addItemField = () => {
     setNewList({
@@ -88,6 +360,7 @@ function GroceryListsPage() {
       items: [...newList.items, '']
     });
   };
+
 
   const updateItem = (index, value) => {
     const newItems = [...newList.items];
@@ -118,6 +391,10 @@ function GroceryListsPage() {
       console.error('Error:', error);
     }
   };
+
+
+
+
 
   const handleListUpdate = async (listId, updatedName) => {
     if (!updatedName) return;
@@ -158,41 +435,6 @@ function GroceryListsPage() {
     }
   };
 
-  const handleItemAdd = async (listId, itemName) => {
-    try {
-      const cleanedItemName = cleanText(itemName).text;
-
-      const groceryResponse = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanedItemName }),
-      });
-
-      if (!groceryResponse.ok) throw new Error('Failed to add item to grocery list');
-
-      const fridgeResponse = await fetch('http://localhost:5000/api/fridge/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cleanedItemName,
-          quantity: 0,
-          unit: ''
-        }),
-      });
-
-      if (!fridgeResponse.ok) throw new Error('Failed to add item to fridge');
-
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists);
-      
-      setNewItemName('');
-      setShowAddItem(false);
-    } catch (error) {
-      console.error('Error adding item:', error);
-    }
-  };
-
   const handleItemUpdate = async (listId, itemId, updatedName) => {
     if (!updatedName) return;
     try {
@@ -211,18 +453,26 @@ function GroceryListsPage() {
     }
   };
 
-  const handleItemDelete = async (listId, itemId) => {
+  const handleItemDelete = async (listId, itemIds) => {
+    if (!Array.isArray(itemIds)) {
+      itemIds = [itemIds];
+    }
     try {
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
-        method: 'DELETE',
+      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/batch-delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ item_ids: itemIds }),
       });
       const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
       const listsData = await listsResponse.json();
       setLists(listsData.lists);
     } catch (error) {
-      console.error('Error deleting item:', error);
+      console.error('Error deleting items:', error);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -240,6 +490,7 @@ function GroceryListsPage() {
           </Link>
         </div>
       </nav>
+
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Grocery Lists</h1>
@@ -252,7 +503,17 @@ function GroceryListsPage() {
           </button>
         </div>
 
-        {/* Color Index Section */}
+
+
+
+
+
+
+
+
+
+
+
         <div className="mb-6 p-4 bg-white rounded-lg shadow-sm">
           <h2 className="text-lg font-semibold mb-2">Color Index:</h2>
           <div className="space-y-2">
@@ -351,47 +612,72 @@ function GroceryListsPage() {
 
               {expandedList === list.id && (
                 <div className="p-4 border-t border-gray-200">
-                  <ul className="space-y-2">
 
-                  {list.items.map((item) => {
-  const { text } = cleanText(item.name);
-  const isRecipeName = !text.includes('•'); // Check if it's a recipe name
+<ul className="space-y-2">
+  {list.items.map((item) => {
+    const { text, color } = cleanText(item.name);
+    const isRecipeName = !text.includes('•');
+    const isSelected = selectedItems.has(item.id);
 
-  return (
-    <li key={item.id} className="flex items-center justify-between group">
-      <div className="flex items-center gap-2">
-        {isRecipeName ? (
-          // Recipe name - no bullet, black text
-          <span className="font-medium text-gray-900">{text}</span>
-        ) : (
-          // Ingredient - with bullet and color
-          <>
-            <span className={getItemColor(text.replace('•', '').trim())}>•</span>
-            <span className={getItemColor(text.replace('•', '').trim())}>
-              {text.replace('•', '').trim()}
-            </span>
-          </>
-        )}
-      </div>
-      <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => handleItemUpdate(list.id, item.id, prompt('Enter new item name:', text))}
-          className="p-1 rounded-full hover:bg-gray-200"
-        >
-          <Edit size={16} />
-        </button>
-        <button
-          onClick={() => handleItemDelete(list.id, item.id)}
-          className="p-1 rounded-full hover:bg-gray-200"
-        >
-          <Trash size={16} />
-        </button>
-      </div>
-    </li>
-  );
-})}
+    return (
+      <li key={item.id} className="flex items-center justify-between group">
+        <div className="flex items-center gap-2">
+          {isRecipeName ? (
+            <span className="font-medium text-gray-900">{text}</span>
+          ) : (
+            <span className={color}>{text}</span>
+          )}
+        </div>
+        <div className="flex items-center space-x-2 opacity-50 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => handleItemUpdate(list.id, item.id, prompt('Enter new item name:', text))}
+            className="p-1 rounded-full hover:bg-gray-200"
+          >
+            <Edit size={16} />
+          </button>
+          <button
+            onClick={() => {
+              if (selectedItems.size > 0) {
+                const newSelected = new Set(selectedItems);
+                if (isSelected) {
+                  newSelected.delete(item.id);
+                } else {
+                  newSelected.add(item.id);
+                }
+                setSelectedItems(newSelected);
+              } else {
+                handleItemDelete(list.id, item.id);
+              }
+            }}
+            className="p-1 rounded-full hover:bg-gray-200"
+          >
+            {isSelected ? (
+              <div className="text-green-500">✓</div>
+            ) : (
+              <Trash size={16} />
+            )}
+          </button>
+        </div>
+      </li>
+    );
+  })}
+</ul>
+{selectedItems.size > 0 && (
+  <div className="flex justify-end mt-4">
+    <button
+  onClick={async () => {
+    if (confirm(`Delete ${selectedItems.size} selected items?`)) {
+      await handleItemDelete(list.id, Array.from(selectedItems));
+      setSelectedItems(new Set());
+    }
+  }}
+  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+>
+  Throw Out ({selectedItems.size})
+</button>
+  </div>
+)}
 
-                  </ul>
                   <div className="mt-4 flex space-x-4">
                     <button
                       onClick={() => setShowAddItem(!showAddItem)}
@@ -401,63 +687,73 @@ function GroceryListsPage() {
                       Add Item
                     </button>
 
-                    {showAddItem && (
-                      <div className="mt-2 fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-                          <h3 className="text-lg font-semibold mb-4">Add New Item</h3>
-                          <input
-                            type="text"
-                            value={newItemName}
-                            onChange={(e) => setNewItemName(e.target.value)}
-                            placeholder="Enter item name..."
-                            className="w-full rounded-md border p-2 mb-4"
-                          />
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                setNewItemName('');
-                                setShowAddItem(false);
-                              }}
-                              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => {
-                                handleItemAdd(list.id, newItemName);
-                                setNewItemName('');
-                                setShowAddItem(false);
-                              }}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                            >
-                              Add
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     <button
-                      onClick={() => router.push('/menus')}
-                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                    >
-                      <Plus size={20} />
-                      Add Item By Menu
-                    </button>
-
-                    <button
-                      onClick={() => router.push('/search')}
+                      onClick={() => setSelectedRecipe(true)}
                       className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
                     >
                       <Plus size={20} />
                       Add Item By Recipe
                     </button>
+
+                    <button
+                      onClick={() => setSelectedMenu(true)}
+                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                    >
+                      <Plus size={20} />
+                      Add Item By Menu
+                    </button>
                   </div>
+
+                  {showAddItem && (
+                    <div className="mt-2 fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                      <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+                        <h3 className="text-lg font-semibold mb-4">Add Item</h3>
+                        <input
+                          type="text"
+                          value={newItemName}
+                          onChange={(e) => setNewItemName(e.target.value)}
+                          placeholder="Enter item name..."
+                          className="w-full rounded-md border p-2 mb-4"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setNewItemName('');
+                              setShowAddItem(false);
+                            }}
+                            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleItemAddManual(list.id, newItemName)}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
+        
+        {selectedRecipe && (
+          <RecipeSelectionModal
+            listId={expandedList}
+            onClose={() => setSelectedRecipe(false)}
+          />
+        )}
+
+        {selectedMenu && (
+          <MenuSelectionModal
+            listId={expandedList}
+            onClose={() => setSelectedMenu(false)}
+          />
+        )}
       </div>
     </div>
   );

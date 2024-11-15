@@ -1,6 +1,6 @@
 // Location: C:\Users\maxwa\maxandjacob\frontend\my-app\src\pages\add-recipe.js
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 

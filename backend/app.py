@@ -6,9 +6,17 @@ from flask_cors import CORS
 from datetime import datetime
 from sqlalchemy import text
 from fuzzywuzzy import fuzz
+from sqlalchemy import func
+
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"]
+    }
+})
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:RecipePassword123!@localhost/recipe_finder'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -24,11 +32,20 @@ class Recipe(db.Model):
    prep_time = db.Column(db.Integer)
    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+
+# Add this near the top with other model definitions
+class RecipeIngredient3(db.Model):
+    __tablename__ = 'recipe_ingredients3'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    recipe_ids = db.Column(db.JSON)
+
+
 class Ingredient(db.Model):
-   id = db.Column(db.Integer, primary_key=True)
-   name = db.Column(db.String(100), nullable=False)
-   recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'), nullable=False)
-   recipe = db.relationship('Recipe', backref=db.backref('ingredients', lazy=True))
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'), nullable=False)
+    recipe = db.relationship('Recipe', backref=db.backref('ingredients', lazy=True))
 
 class Menu(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -61,24 +78,31 @@ class GroceryItem(db.Model):
     list_id = db.Column(db.Integer, db.ForeignKey('grocery_list.id'), nullable=False)
     grocery_list = db.relationship('GroceryList', backref=db.backref('items', lazy=True))
 
+# Update the get_recipe function
 @app.route('/api/recipe/<int:recipe_id>')
 def get_recipe(recipe_id):
-   try:
-       recipe = Recipe.query.get_or_404(recipe_id)
-       
-       recipe_data = {
-           'id': recipe.id,
-           'name': recipe.name,
-           'description': recipe.description,
-           'instructions': recipe.instructions,
-           'prep_time': recipe.prep_time,
-           'ingredients': [ingredient.name for ingredient in recipe.ingredients]
-       }
-       
-       return jsonify(recipe_data)
-   except Exception as e:
-       print(f"Recipe detail error: {str(e)}")
-       return jsonify({'error': str(e)}), 500
+    try:
+        recipe = Recipe.query.get_or_404(recipe_id)
+        
+        # Modified query to get ingredients from new table
+        ingredients = db.session.query(RecipeIngredient3.name)\
+            .filter(db.text(f'JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
+            .params(recipe_id=recipe_id)\
+            .all()
+        
+        recipe_data = {
+            'id': recipe.id,
+            'name': recipe.name,
+            'description': recipe.description,
+            'instructions': recipe.instructions,
+            'prep_time': recipe.prep_time,
+            'ingredients': [ingredient[0] for ingredient in ingredients]
+        }
+        
+        return jsonify(recipe_data)
+    except Exception as e:
+        print(f"Recipe detail error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/home-data')
 def home_data():
@@ -111,13 +135,22 @@ def get_all_recipes():
     try:
         recipes = Recipe.query.order_by(Recipe.id.asc()).all()
         print(f"Found {len(recipes)} recipes")
-        recipes_data = [{
-            'id': recipe.id,
-            'name': recipe.name,
-            'description': recipe.description,
-            'prep_time': recipe.prep_time,
-            'ingredients': [ingredient.name for ingredient in recipe.ingredients]
-        } for recipe in recipes]
+        
+        recipes_data = []
+        for recipe in recipes:
+            # Get ingredients using the new recipe_ingredients3 table
+            ingredients = db.session.query(RecipeIngredient3.name)\
+                .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
+                .params(recipe_id=recipe.id)\
+                .all()
+            
+            recipes_data.append({
+                'id': recipe.id,
+                'name': recipe.name,
+                'description': recipe.description,
+                'prep_time': recipe.prep_time,
+                'ingredients': [ingredient[0] for ingredient in ingredients]
+            })
         
         return jsonify({
             'recipes': recipes_data,
@@ -130,53 +163,7 @@ def get_all_recipes():
             'count': 0
         }), 500
 
-@app.route('/api/search')
-def search():
-    ingredients = request.args.getlist('ingredient')
-    try:
-        if ingredients:
-            subquery = """
-                SELECT r.id, r.name, r.description, r.instructions, r.prep_time,
-                       COUNT(DISTINCT i.id) as matched_count
-                FROM recipe r
-                JOIN ingredient i ON r.id = i.recipe_id
-                WHERE i.name REGEXP :ingredient_pattern
-                GROUP BY r.id
-                HAVING matched_count = :ingredient_count
-            """
-            
-            ingredient_pattern = '|'.join(ingredients)
-            
-            recipes = db.session.execute(text(subquery), {
-                'ingredient_pattern': ingredient_pattern,
-                'ingredient_count': len(ingredients)
-            }).all()
-            
-            recipes_data = [{
-                'id': recipe.id,
-                'name': recipe.name,
-                'description': recipe.description,
-                'prep_time': recipe.prep_time,
-                'ingredients': [ing.name for ing in 
-                    Ingredient.query.filter_by(recipe_id=recipe.id).all()]
-            } for recipe in recipes]
-            
-            return jsonify({
-                'results': recipes_data,
-                'count': len(recipes_data)
-            })
-        else:
-            return jsonify({
-                'results': [],
-                'count': 0
-            })
-    except Exception as e:
-        print(f"Search error: {str(e)}")
-        return jsonify({
-            'error': str(e),
-            'results': [],
-            'count': 0
-        }), 500
+
     
 @app.route('/api/recipe', methods=['POST'])
 def add_recipe():
@@ -190,14 +177,26 @@ def add_recipe():
             prep_time=int(data['prep_time'])
         )
         db.session.add(new_recipe)
-        db.session.flush()
+        db.session.flush()  # Get the new recipe ID
         
+        # Handle ingredients with the new table structure
         for ingredient_name in data['ingredients']:
-            ingredient = Ingredient(
-                name=ingredient_name,
-                recipe_id=new_recipe.id
-            )
-            db.session.add(ingredient)
+            # Try to find existing ingredient
+            ingredient = RecipeIngredient3.query.filter_by(name=ingredient_name).first()
+            
+            if ingredient:
+                # Update existing ingredient's recipe_ids
+                current_ids = ingredient.recipe_ids if ingredient.recipe_ids else []
+                if new_recipe.id not in current_ids:
+                    current_ids.append(new_recipe.id)
+                ingredient.recipe_ids = current_ids
+            else:
+                # Create new ingredient
+                new_ingredient = RecipeIngredient3(
+                    name=ingredient_name,
+                    recipe_ids=[new_recipe.id]
+                )
+                db.session.add(new_ingredient)
         
         db.session.commit()
         
@@ -210,7 +209,7 @@ def add_recipe():
         db.session.rollback()
         print(f"Error adding recipe: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
+
 @app.route('/api/menus', methods=['GET'])
 def get_menus():
     try:
@@ -244,18 +243,29 @@ def get_menu_recipes(menu_id):
     try:
         menu = Menu.query.get_or_404(menu_id)
         recipes = [mr.recipe for mr in menu.menu_recipes]
-        recipes_data = [{
-            'id': recipe.id,
-            'name': recipe.name,
-            'description': recipe.description,
-            'prep_time': recipe.prep_time,
-            'ingredients': [ingredient.name for ingredient in recipe.ingredients]
-        } for recipe in recipes]
+        
+        # Modified query to get ingredients from new table
+        recipes_data = []
+        for recipe in recipes:
+            ingredients = db.session.query(RecipeIngredient3.name)\
+                .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
+                .params(recipe_id=recipe.id)\
+                .all()
+            
+            recipes_data.append({
+                'id': recipe.id,
+                'name': recipe.name,
+                'description': recipe.description,
+                'prep_time': recipe.prep_time,
+                'ingredients': [ingredient[0] for ingredient in ingredients]
+            })
+        
         return jsonify({
             'menu_name': menu.name,
             'recipes': recipes_data
         })
     except Exception as e:
+        print(f"Error fetching menu recipes: {str(e)}")  # Add this for debugging
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menus/<int:menu_id>/recipes', methods=['POST'])
@@ -279,6 +289,32 @@ def add_recipe_to_menu(menu_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/menus/<int:menu_id>', methods=['DELETE', 'OPTIONS'])
+def delete_menu(menu_id):
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+        
+    print(f"Attempting to delete menu {menu_id}")  # Debug log
+    try:
+        # First delete all menu-recipe associations
+        MenuRecipe.query.filter_by(menu_id=menu_id).delete()
+        
+        # Then delete the menu itself
+        menu = Menu.query.get_or_404(menu_id)
+        db.session.delete(menu)
+        db.session.commit()
+        
+        print(f"Successfully deleted menu {menu_id}")  # Debug log
+        return jsonify({'message': 'Menu deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting menu {menu_id}: {str(e)}")  # Debug log
+        return jsonify({'error': str(e)}), 500
+    
+
+
 
 @app.route('/api/menus/<int:menu_id>/recipes/<int:recipe_id>', methods=['DELETE'])
 def remove_recipe_from_menu(menu_id, recipe_id):
@@ -295,22 +331,49 @@ def remove_recipe_from_menu(menu_id, recipe_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-
-
 @app.route('/api/fridge/add', methods=['POST'])
 def add_fridge_item():
     try:
         data = request.json
-        new_item = FridgeItem(
-            name=data['name'],
-            quantity=data['quantity'], 
-            unit=data['unit'] if 'unit' in data else None
-        )
-        db.session.add(new_item)
-        db.session.commit()
-        return jsonify({'message': 'Item added to fridge'}), 201
+        
+        # Check if item already exists
+        existing_item = FridgeItem.query.filter(
+            func.lower(FridgeItem.name) == func.lower(data['name'])
+        ).first()
+        
+        if existing_item:
+            # Update existing item's quantity
+            existing_item.quantity += int(data['quantity'])
+            if 'unit' in data and data['unit']:
+                existing_item.unit = data['unit']
+            db.session.commit()
+            return jsonify({
+                'message': 'Item quantity updated',
+                'id': existing_item.id,
+                'name': existing_item.name,
+                'quantity': existing_item.quantity,
+                'unit': existing_item.unit
+            }), 200
+        else:
+            # Create new item
+            new_item = FridgeItem(
+                name=data['name'],
+                quantity=data['quantity'], 
+                unit=data['unit'] if 'unit' in data else None
+            )
+            db.session.add(new_item)
+            db.session.commit()
+            return jsonify({
+                'message': 'Item added to fridge',
+                'id': new_item.id,
+                'name': new_item.name,
+                'quantity': new_item.quantity,
+                'unit': new_item.unit
+            }), 201
+            
     except Exception as e:
         db.session.rollback()
+        print(f"Error in add_fridge_item: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/fridge/parse-receipt', methods=['POST'])
@@ -318,18 +381,14 @@ def parse_receipt():
     try:
         data = request.json
         receipt_text = data['receipt_text'].lower()
-        # Split on common delimiters
-        words = ' '.join(receipt_text.split('\n')).split()  
+        words = ' '.join(receipt_text.split('\n')).split()
         matched_items = {}
-        unmatched_items = set()  # Track unmatched items for feedback
+        unmatched_items = set()
 
         # Get all unique ingredients from database for matching
         ingredients = db.session.query(Ingredient.name).distinct().all()
         ingredient_names = {i[0].lower() for i in ingredients}
         
-        # Get existing fridge items
-        existing_items = {item.name.lower(): item for item in FridgeItem.query.all()}
-
         # First pass: find exact matches
         for word in words:
             if word in ingredient_names:
@@ -338,9 +397,8 @@ def parse_receipt():
                 unmatched_items.add(word)
 
         # Second pass: check for partial matches in remaining unmatched items
-        for word in list(unmatched_items):  # Convert to list as we'll modify the set
+        for word in list(unmatched_items):
             for ing_name in ingredient_names:
-                # If ingredient name is found within the unmatched word
                 if ing_name in word:
                     matched_items[ing_name] = matched_items.get(ing_name, 0) + 1
                     unmatched_items.remove(word)
@@ -349,14 +407,19 @@ def parse_receipt():
         # Update database with matches
         results = []
         for ingredient, quantity in matched_items.items():
-            if ingredient in existing_items:
+            # Check for existing item (case-insensitive)
+            existing_item = FridgeItem.query.filter(
+                func.lower(FridgeItem.name) == func.lower(ingredient)
+            ).first()
+            
+            if existing_item:
                 # Update existing item
-                existing_items[ingredient].quantity += quantity
+                existing_item.quantity += quantity
                 results.append({
                     'matched_ingredient': ingredient,
                     'quantity': quantity,
                     'action': 'updated',
-                    'current_total': existing_items[ingredient].quantity
+                    'current_total': existing_item.quantity
                 })
             else:
                 # Add new item
@@ -375,13 +438,14 @@ def parse_receipt():
         db.session.commit()
         return jsonify({
             'matched_items': results,
-            'unmatched_items': list(unmatched_items),  # Return unmatched for feedback
+            'unmatched_items': list(unmatched_items),
             'total_matches': len(results)
         })
     except Exception as e:
         db.session.rollback()
         print(f"Error in parse_receipt: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/fridge')
 def get_fridge_items():
@@ -556,8 +620,116 @@ def add_item_to_list(list_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
-
-
+@app.route('/api/grocery-lists/<int:list_id>/items/<int:item_id>', methods=['DELETE'])
+def delete_grocery_item(list_id, item_id):
+    try:
+        item = GroceryItem.query.get_or_404(item_id)
+        if item.list_id != list_id:
+            return jsonify({'error': 'Item not found in the specified list'}), 404
+            
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify({'message': 'Grocery item deleted'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/grocery-lists/<int:list_id>/items/batch-delete', methods=['POST'])
+def batch_delete_grocery_items(list_id):
+    try:
+        data = request.json
+        item_ids = data.get('item_ids', [])
+        
+        # Delete all specified items
+        deleted_count = 0
+        for item_id in item_ids:
+            item = GroceryItem.query.get(item_id)
+            if item and item.list_id == list_id:
+                db.session.delete(item)
+                deleted_count += 1
+        
+        db.session.commit()
+        return jsonify({
+            'message': f'Successfully deleted {deleted_count} items',
+            'deleted_count': deleted_count
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in batch delete: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/search')
+def search():
+    ingredients = request.args.getlist('ingredient')
+    try:
+        if ingredients:
+            # Create a query that properly handles JSON array of recipe_ids
+            subquery = """
+                WITH RECURSIVE numbered_ingredients AS (
+                    SELECT name, recipe_ids
+                    FROM recipe_ingredients3
+                    WHERE LOWER(name) REGEXP LOWER(:ingredient_pattern)
+                ),
+                recipe_matches AS (
+                    SELECT DISTINCT 
+                        JSON_UNQUOTE(JSON_EXTRACT(r.recipe_ids, CONCAT('$[', numbers.n, ']'))) as recipe_id
+                    FROM numbered_ingredients r
+                    CROSS JOIN (
+                        SELECT a.N + b.N * 10 + c.N * 100 as n
+                        FROM (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
+                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b
+                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) c
+                    ) numbers
+                    WHERE JSON_UNQUOTE(JSON_EXTRACT(r.recipe_ids, CONCAT('$[', numbers.n, ']'))) IS NOT NULL
+                    GROUP BY JSON_UNQUOTE(JSON_EXTRACT(r.recipe_ids, CONCAT('$[', numbers.n, ']')))
+                    HAVING COUNT(DISTINCT r.name) >= :ingredient_count
+                )
+                SELECT r.id, r.name, r.description, r.instructions, r.prep_time
+                FROM recipe r
+                INNER JOIN recipe_matches rm ON r.id = CAST(rm.recipe_id AS SIGNED)
+            """
+            
+            ingredient_pattern = '|'.join(ingredients)
+            
+            recipes = db.session.execute(text(subquery), {
+                'ingredient_pattern': ingredient_pattern,
+                'ingredient_count': len(ingredients)
+            }).all()
+            
+            # Get ingredients for each recipe
+            recipes_data = []
+            for recipe in recipes:
+                # Fetch ingredients using the recipe_ingredients3 table
+                ingredients = db.session.query(RecipeIngredient3.name)\
+                    .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
+                    .params(recipe_id=recipe.id)\
+                    .all()
+                
+                recipes_data.append({
+                    'id': recipe.id,
+                    'name': recipe.name,
+                    'description': recipe.description,
+                    'prep_time': recipe.prep_time,
+                    'ingredients': [ingredient[0] for ingredient in ingredients]
+                })
+            
+            return jsonify({
+                'results': recipes_data,
+                'count': len(recipes_data)
+            })
+        else:
+            return jsonify({
+                'results': [],
+                'count': 0
+            })
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'results': [],
+            'count': 0
+        }), 500
+    
 
 if __name__ == '__main__':
    with app.app_context():

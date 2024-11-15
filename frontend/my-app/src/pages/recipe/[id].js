@@ -18,8 +18,8 @@ export default function RecipePage() {
     const actualPrevPath = localStorage.getItem('actualPreviousPath');
     const lastPath = localStorage.getItem('lastPath');
     
-    if (actualPrevPath) {
-      setBackPath(actualPrevPath);
+    if (actualPrevPath && actualPrevPath.startsWith('/menu/')) {
+      setBackPath('/menus');  // Always go back to menus if coming from a menu
     } else if (lastPath) {
       setBackPath(lastPath);
     } else {
@@ -125,6 +125,11 @@ export default function RecipePage() {
       <Link 
   href={backPath}
   className="mb-8 inline-block text-blue-600 hover:text-blue-700"
+          onClick={() => {
+            // Store the path we're going back to
+            localStorage.setItem('lastPath', backPath);
+          }}
+          
 >
   ← Back to {backPath === '/menus' ? 'Menus' : 
              backPath === '/search' ? 'Search' : 

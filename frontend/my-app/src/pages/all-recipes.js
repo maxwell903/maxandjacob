@@ -1,24 +1,26 @@
 // src/pages/all-recipes.js
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 export default function AllRecipes() {
+  const router = useRouter();
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  
   useEffect(() => {
-    // Store the current path for navigation tracking
-    localStorage.setItem('lastPath', '/all-recipes');
-    
     const fetchRecipes = async () => {
       try {
-        console.log("Fetching recipes...")
+        setLoading(true);
         const response = await fetch('http://localhost:5000/api/all-recipes');
-        console.log("Response:", response)
-        if (!response.ok) throw new Error('Failed to fetch recipes');
+        if (!response.ok) {
+          throw new Error('Failed to fetch recipes');
+        }
         const data = await response.json();
-        setRecipes(data.recipes);
+        setRecipes(data.recipes || []);
+        setError(null);
       } catch (err) {
         console.error("Fetch error:", err);
         setError(err.message);
@@ -35,6 +37,22 @@ export default function AllRecipes() {
       <div className="flex h-screen items-center justify-center">
         <div className="rounded-lg bg-white p-8 shadow-lg">
           <p className="text-gray-600">Loading recipes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="rounded-lg bg-red-100 p-8 text-red-700">
+          {error}
+          <button 
+            onClick={() => router.push('/')}
+            className="mt-4 block text-blue-600 hover:text-blue-800"
+          >
+            Return to Home
+          </button>
         </div>
       </div>
     );

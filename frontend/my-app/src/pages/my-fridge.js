@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link'; // Add this import
 
 export default function InventoryView() {
   const [recipes, setRecipes] = useState([]);
