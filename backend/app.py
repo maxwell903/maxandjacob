@@ -18,7 +18,7 @@ CORS(app, resources={
     }
 })
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:RecipePassword123!@localhost/recipe_finder'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:RecipePassword123!@localhost/recipe_finder'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -730,6 +730,30 @@ def search():
             'count': 0
         }), 500
     
+@app.route('/api/recipe/<int:recipe_id>', methods=['DELETE'])
+def delete_recipe(recipe_id):
+    try:
+        recipe = Recipe.query.get_or_404(recipe_id)
+        
+        # Delete associated ingredients first
+        RecipeIngredient3.query.filter(
+            text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))')
+        ).params(recipe_id=recipe_id).update(
+            {"recipe_ids": text("JSON_REMOVE(recipe_ids, JSON_UNQUOTE(JSON_SEARCH(recipe_ids, 'one', :recipe_id)))")},
+            synchronize_session=False
+        )
+        
+        # Delete the recipe from menus
+        MenuRecipe.query.filter_by(recipe_id=recipe_id).delete()
+        
+        # Delete the recipe itself
+        db.session.delete(recipe)
+        db.session.commit()
+        
+        return jsonify({'message': 'Recipe deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
    with app.app_context():

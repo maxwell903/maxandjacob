@@ -60,10 +60,10 @@ export default function Home() {
             <div className="flex justify-center gap-4">
               <Link 
                 href="/search"
-                className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
               >
                 Search Recipes by Ingredients →
-              </Link>\
+              </Link>
 
               <Link 
   href="/add-recipe"
@@ -75,14 +75,14 @@ export default function Home() {
 
               <Link 
                 href="/all-recipes"
-                className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
               >
                 View All Recipes
               </Link>
 
               <Link 
   href="/my-fridge"
-  className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
+  className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
   onClick={() => localStorage.setItem('previousPath', '/')}
 >
   My Fridge
@@ -91,7 +91,7 @@ export default function Home() {
               
 <Link
   href="/grocerylistId"
-  className="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white hover:bg-purple-700 transition-colors duration-200"
+  className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
   onClick={() => localStorage.setItem('previousPath', '/')}
 >
   Grocery Lists
@@ -99,14 +99,14 @@ export default function Home() {
 
               <Link 
                 href="/menus"
-                className="inline-block rounded-lg bg-orange-600 px-6 py-3 text-white hover:bg-orange-700 transition-colors duration-200"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
               >
                 My Menus
               </Link>
             </div>
 
             {error && (
-              <div className="mb-8 rounded-lg bg-red-100 p-4 text-red-700">
+              <div className="mb-8 rounded-lg bg-green-100 p-4 text-red-700">
                 {error}
               </div>
             )}
@@ -134,7 +134,7 @@ export default function Home() {
         <p className="text-sm text-gray-500">
           Prep time: {recipe.prep_time} mins
         </p>
-        <div className="mt-4 text-blue-600 hover:text-blue-700">
+        <div className="mt-4 text-green-600 hover:text-green-700">
           View Recipe →
         </div>
       </div>
