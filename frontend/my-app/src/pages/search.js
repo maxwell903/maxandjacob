@@ -116,7 +116,7 @@ export default function Search() {
             {error}
           </div>
         )}
-        // In the search results section where you map over searchResults.results
+        
 {searchResults && (
   <div>
     <h2 className="text-2xl font-bold text-gray-900 mb-6">

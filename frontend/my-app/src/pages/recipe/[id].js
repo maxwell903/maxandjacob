@@ -288,41 +288,51 @@ const handleAddToGroceryList = async (listId) => {
   </button>
   
   {showMenuDropdown && (
-    <div 
-      className="absolute right-0 mt-2 w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 z-10"
-      onClick={(e) => e.stopPropagation()}  // Add this
-    >
-      {menus.map((menu) => (
-        <button
-          key={menu.id}
-          onClick={async (e) => {
-            e.stopPropagation();  // Add this
-            try {
-              setAddingToMenu(true);
-              const response = await fetch(`http://localhost:5000/api/menus/${menu.id}/recipes`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recipe_id: id }),
-              });
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+        <h3 className="text-lg font-semibold mb-4">Select Menu</h3>
+        <div className="space-y-2">
+          {menus.map((menu) => (
+            <button
+              key={menu.id}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  setAddingToMenu(true);
+                  const response = await fetch(`http://localhost:5000/api/menus/${menu.id}/recipes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recipe_id: id }),
+                  });
 
-              if (!response.ok) {
-                throw new Error('Failed to add recipe to menu');
-              }
+                  if (!response.ok) {
+                    throw new Error('Failed to add recipe to menu');
+                  }
 
-              alert(`Added to ${menu.name}`);
-              setShowMenuDropdown(false);
-            } catch (error) {
-              console.error('Error adding to menu:', error);
-              alert('Failed to add to menu');
-            } finally {
-              setAddingToMenu(false);
-            }
-          }}
-          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-        >
-          {menu.name}
-        </button>
-      ))}
+                  alert(`Added to ${menu.name}`);
+                  setShowMenuDropdown(false);
+                } catch (error) {
+                  console.error('Error adding to menu:', error);
+                  alert('Failed to add to menu');
+                } finally {
+                  setAddingToMenu(false);
+                }
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+            >
+              {menu.name}
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setShowMenuDropdown(false)}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   )}
 </div>

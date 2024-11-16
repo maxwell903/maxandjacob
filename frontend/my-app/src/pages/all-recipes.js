@@ -2,14 +2,30 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { debounce } from 'lodash';
+
+const SearchInput = ({ value, onChange }) => {
+  return (
+    <div className="mb-8">
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        placeholder="Search recipes..."
+        className="w-full p-2 border border-gray-300 rounded-md"
+      />
+    </div>
+  );
+};
 
 export default function AllRecipes() {
   const router = useRouter();
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredRecipes, setFilteredRecipes] = useState([]);
 
-  
   useEffect(() => {
     const fetchRecipes = async () => {
       try {
@@ -20,6 +36,7 @@ export default function AllRecipes() {
         }
         const data = await response.json();
         setRecipes(data.recipes || []);
+        setFilteredRecipes(data.recipes || []);
         setError(null);
       } catch (err) {
         console.error("Fetch error:", err);
@@ -31,6 +48,21 @@ export default function AllRecipes() {
 
     fetchRecipes();
   }, []);
+
+  useEffect(() => {
+    const debouncedSearch = debounce((value) => {
+      const filtered = recipes.filter(recipe =>
+        recipe.name.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredRecipes(filtered);
+    }, 300);
+
+    debouncedSearch(searchTerm);
+
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchTerm, recipes]);
 
   if (loading) {
     return (
@@ -47,7 +79,7 @@ export default function AllRecipes() {
       <div className="flex h-screen items-center justify-center">
         <div className="rounded-lg bg-red-100 p-8 text-red-700">
           {error}
-          <button 
+          <button
             onClick={() => router.push('/')}
             className="mt-4 block text-blue-600 hover:text-blue-800"
           >
@@ -62,8 +94,8 @@ export default function AllRecipes() {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="text-blue-600 hover:text-blue-800"
             onClick={() => {
               localStorage.setItem('actualPreviousPath', '/');
@@ -77,16 +109,15 @@ export default function AllRecipes() {
 
       <div className="mx-auto max-w-6xl px-4 py-8">
         <h1 className="mb-8 text-3xl font-bold text-gray-900">All Recipes</h1>
-        
-        {error && (
-          <div className="mb-8 rounded-lg bg-red-100 p-4 text-red-700">
-            {error}
-          </div>
-        )}
+
+        <SearchInput
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
 
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((recipe) => (
-            <Link 
+          {filteredRecipes.map((recipe) => (
+            <Link
               href={`/recipe/${recipe.id}`}
               key={recipe.id}
               className="block no-underline"
