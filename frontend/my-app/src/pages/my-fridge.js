@@ -2,7 +2,268 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link'; // Add this import
-import { ChevronDown, ChevronUp} from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit, Plus, Trash} from 'lucide-react';
+
+
+const GroceryListColumn = ({ fridgeItems }) => {
+  const [groceryLists, setGroceryLists] = useState([]);
+  const [selectedList, setSelectedList] = useState(null);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [expandedLists, setExpandedLists] = useState(new Set());
+  const [editingItem, setEditingItem] = useState(null);
+  const [showListDropdown, setShowListDropdown] = useState(false);
+
+  useEffect(() => {
+    fetchGroceryLists();
+  }, []);
+
+  const fetchGroceryLists = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/grocery-lists');
+      const data = await response.json();
+      setGroceryLists(data.lists || []);
+    } catch (error) {
+      console.error('Error fetching grocery lists:', error);
+    }
+  };
+
+  const handleAddItem = async (listId) => {
+    if (!newItemName.trim()) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `[black]• ${newItemName}` }),
+      });
+
+      if (response.ok) {
+        setNewItemName('');
+        setShowAddItemModal(false);
+        fetchGroceryLists();
+      }
+    } catch (error) {
+      console.error('Error adding item:', error);
+    }
+  };
+
+  const handleDeleteItem = async (listId, itemId) => {
+    try {
+      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
+        method: 'DELETE'
+      });
+      fetchGroceryLists();
+    } catch (error) {
+      console.error('Error deleting item:', error);
+    }
+  };
+
+  const handleEditItem = async (listId, itemId, newName) => {
+    try {
+      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `[black]• ${newName}` }),
+      });
+      setEditingItem(null);
+      fetchGroceryLists();
+    } catch (error) {
+      console.error('Error updating item:', error);
+    }
+  };
+
+  const toggleListExpansion = (listId) => {
+    const newExpanded = new Set(expandedLists);
+    if (newExpanded.has(listId)) {
+      newExpanded.delete(listId);
+    } else {
+      newExpanded.add(listId);
+    }
+    setExpandedLists(newExpanded);
+  };
+
+  const cleanText = (text) => {
+    let color = 'text-gray-900';
+    if (text.includes('[green]')) color = 'text-green-600';
+    if (text.includes('[red]')) color = 'text-red-600';
+    return {
+      text: text.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim(),
+      color
+    };
+  };
+
+  return (
+    <div className="w-full bg-white rounded-lg shadow-lg p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Grocery Lists</h2>
+        <div className="relative">
+          <button
+            onClick={() => setShowListDropdown(!showListDropdown)}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Select List {showListDropdown ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          
+          {showListDropdown && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50">
+              {groceryLists.map(list => (
+                <button
+                  key={list.id}
+                  onClick={() => {
+                    setSelectedList(list.id);
+                    setShowListDropdown(false);
+                    setExpandedLists(new Set([...expandedLists, list.id]));
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg"
+                >
+                  {list.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {groceryLists.map(list => (
+          <div
+            key={list.id}
+            className={`border rounded-lg p-4 ${selectedList === list.id ? 'border-blue-500' : 'border-gray-200'}`}
+          >
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">{list.name}</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowAddItemModal(list.id)}
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                >
+                  <Plus size={16} />
+                </button>
+                <button
+                  onClick={() => toggleListExpansion(list.id)}
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                >
+                  {expandedLists.has(list.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {expandedLists.has(list.id) && (
+              <div className="mt-4 space-y-2">
+                {list.items.map(item => (
+                  <div key={item.id} className="flex justify-between items-center group">
+                    {editingItem === item.id ? (
+                      <input
+                        type="text"
+                        defaultValue={cleanText(item.name).text}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleEditItem(list.id, item.id, e.target.value);
+                          }
+                        }}
+                        className="flex-1 px-2 py-1 border rounded"
+                        autoFocus
+                      />
+                    ) : (
+                      <span className={cleanText(item.name).color}>
+                        {cleanText(item.name).text}
+                      </span>
+                    )}
+                    
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                      <button
+                        onClick={() => setEditingItem(item.id)}
+                        className="p-1 hover:bg-gray-100 rounded-full"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(list.id, item.id)}
+                        className="p-1 hover:bg-gray-100 rounded-full text-red-600"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {showAddItemModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+            <h3 className="text-lg font-semibold mb-4">Add Item</h3>
+            <input
+              type="text"
+              value={newItemName}
+              onChange={e => setNewItemName(e.target.value)}
+              placeholder="Enter item name..."
+              className="w-full px-3 py-2 border rounded-lg mb-4"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleAddItem(showAddItemModal);
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowAddItemModal(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddItem(showAddItemModal)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+const ImprovedInput = ({ 
+  value, 
+  onChange, 
+  onEnter, 
+  placeholder = '', 
+  className = '',
+  required = false,
+  type = 'text'
+}) => {
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onEnter?.(e);
+    }
+  };
+
+  const handleChange = (e) => {
+    onChange?.(e.target.value);
+  };
+
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={`mt-1 block rounded-md border border-gray-300 px-3 py-2 ${className}`}
+      required={required}
+    />
+  );
+};
 
 export default function InventoryView() {
   const [recipes, setRecipes] = useState([]);
@@ -15,7 +276,7 @@ export default function InventoryView() {
   const [loading, setLoading] = useState(true);
   const [addMode, setAddMode] = useState('manual');
   const [pastedText, setPastedText] = useState('');
-  const [newItem, setNewItem] = useState({ name: '', quantity: '', unit: '' });
+  const [newItem, setNewItem] = useState({ name: '', quantity: 0, unit: '' });
   const [processingResults, setProcessingResults] = useState(null);
   const [inventoryFilter, setInventoryFilter] = useState('inStock');
   const router = useRouter();
@@ -85,26 +346,61 @@ export default function InventoryView() {
   fridgeItems = [],
   onInventoryUpdate,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const [isFormOpen, setIsFormOpen] = useState(true);  // Add this line
+  
   
   const filteredItems = getFilteredInventory();
   const midPoint = Math.ceil(filteredItems.length / 2);
   const leftColumnItems = filteredItems.slice(0, midPoint);
   const rightColumnItems = filteredItems.slice(midPoint);
   const [expandedList, setExpandedList] = useState(null);
+  const ImprovedInput = ({ 
+  value, 
+  onChange, 
+  onEnter, 
+  placeholder = '', 
+  className = '',
+  required = false,
+  type = 'text'
+}) => {
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onEnter?.(e);
+    }
+  };
+
+  const handleChange = (e) => {
+    onChange?.(e.target.value);
+  };
+
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={`mt-1 block rounded-md border border-gray-300 px-3 py-2 ${className}`}
+      required={required}
+    />
+  );
+};
 
   return (
     <div className="mb-8">
       {/* Collapsible Add to Inventory Section */}
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        
+        onClick={() => setIsFormOpen(!isFormOpen)}
         className="w-full bg-white rounded-lg shadow p-4 mb-4 flex justify-between items-center hover:bg-gray-50"
       >
         <h2 className="text-xl font-semibold">Add to Inventory</h2>
-        {isExpanded ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
+        {isFormOpen ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
       </button>
 
-      {isExpanded && (
+      {isFormOpen && (
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="mb-4 flex gap-4">
             <button
@@ -137,36 +433,29 @@ export default function InventoryView() {
             <form onSubmit={handleManualAdd} className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Item Name</label>
-                <input
-                  type="text"
-                  value={newItem.name}
-                 
-                  onChange={(e) =>  {
-                    
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleManualAdd(e);
-                      setNewItem({...newItem, name: e.target.value})
-                    }
-                    
-                  }}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-                  required
-                />
+                <ImprovedInput
+  value={newItem.name}
+  onChange={(value) => setNewItem(prev => ({...prev, name: value}))}
+  onEnter={handleManualAdd}
+  placeholder="Enter item name"
+  required
+  className="w-full"
+/>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Quantity</label>
                 <input
                   type="number"
                   value={newItem.quantity}
-                  
-                  onKeyDown={(e) => {
+                  onChange={(e) => setNewItem({...newItem, quantity: parseInt(e.target.value)})}
+                  onKeyDown={(e)=> {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       handleManualAdd(e);
                     }
                   }}
                   className="mt-1 block w-10 rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="0"
                   required
                 />
               </div>
@@ -175,15 +464,17 @@ export default function InventoryView() {
                 <input
                   type="text"
                   value={newItem.unit}
-                  
-                  onKeyDown={(e) => {
+                  onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
+                  onKeyDown={(e)=> {
                     if (e.key === 'Enter') {
-                      setNewItem({...newItem, unit: e.target.value})
                       e.preventDefault();
-                      handleManualAdd(e);
+                      handleManualAdd(e)
                     }
+                    
                   }}
+
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Optional unit"
                 />
               </div>
               <div className="col-span-3">
@@ -319,38 +610,7 @@ export default function InventoryView() {
    </div>
    {/* Grocery Lists Column */}
    <div className="w-1/3">
-     <div className="bg-white rounded-lg shadow p-4">
-       <h2 className="text-xl font-semibold mb-4">Grocery Lists</h2>
-       {Array.isArray(groceryLists) && groceryLists.map((list) => (
-         <div key={list.id} className="mb-4">
-           
-           <button
-                onClick={() => setExpandedList(expandedList === list.id ? null : list.id)}
-                className="flex items-center justify-between w-full p-2 bg-gray-50 hover:bg-gray-100 rounded"
-              >
-                <span>{list.name}</span>
-                {expandedList === list.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
-             {expandedList === list.id && (
-                <div className="mt-2 pl-4">
-                  {Array.isArray(list.items) && list.items.map((item) => {
-                    const isInStock = fridgeItems.some(
-                      (fridgeItem) => 
-                        fridgeItem.name.toLowerCase() === item.name.toLowerCase().replace(/[*•\[\]]/g, '').trim() && 
-                        fridgeItem.quantity > 0
-                    );
-                    return (
-                      <div key={item.id} className={`p-2 ${isInStock ? 'text-green-600' : 'text-red-600'}`}>
-                        {item.name.replace(/[*•\[\]]/g, '').trim()}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            
-         </div>
-       ))}
-     </div>
+    <GroceryListColumn fridgeItems={fridgeItems} />
    </div>
  </div>
  
@@ -366,6 +626,8 @@ export default function InventoryView() {
 
 // Helper component for inventory rows
 
+
+  
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -407,7 +669,7 @@ export default function InventoryView() {
         const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
         const fridgeData = await fridgeResponse.json();
         setFridgeItems(fridgeData.ingredients);
-        setNewItem({ name: '', quantity: '', unit: '' });
+        setNewItem({ name: '', quantity: 0, unit: '' });
       }
     } catch (error) {
       console.error('Error adding item:', error);
@@ -528,6 +790,7 @@ export default function InventoryView() {
              <input
                type="number"
                value={localQuantity}
+               
                onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   setNewItem({...newItem, quantity: e.target.value})
@@ -622,7 +885,7 @@ export default function InventoryView() {
           </div>
         )}
         <div className="mb-8 bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Add to Inventorpoopoy</h2>
+          <h2 className="text-xl font-semibold mb-4">Add to Inventory</h2>
           <div className="mb-4 flex gap-4">
             <button
               onClick={() => setAddMode('manual')}
@@ -651,56 +914,64 @@ export default function InventoryView() {
           </div>
 
           {addMode === 'manual' && (
-            <form onSubmit={handleManualAdd} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Item Name</label>
-                <input
-                  type="text"
-                  value={newItem.name}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setNewItem({...newItem, name: e.target.value})
-                      e.preventDefault();
-                      handleManualAdd(e);
-                    }
-                  }}
-                  className="mt-1 block w-full rounded-md border border-gray-100 px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                <input
-                  type="number"
-                  value={newItem.quantity}
-                 onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      setNewItem({...newItem, quantity: e.target.value})
-                      e.preventDefault();
-                      handleManualAdd(e);
-                    }
-                  }}
-                  className="mt-1 block w-10 rounded-md border border-gray-300 px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Unit</label>
-                <input
-                  type="text"
-                  value={newItem.unit}
-                  onChange={() => setNewItem({...newItem, unit: e.target.value})}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <button 
-                type="submit" 
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
-                Add Item
-              </button>
-            </form>
-          )}
+  <form onSubmit={handleManualAdd} className="grid grid-cols-3 gap-4">
+    <div>
+      <label className="block text-sm font-medium text-gray-700">Item Name</label>
+      <input
+        type="text"
+        value={newItem.name}
+        onChange={(e) => setNewItem(prev => ({...prev, name: e.target.value}))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleManualAdd(e);
+          }
+        }}
+        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+        placeholder="Enter item name"
+        required
+      />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700">Quantity</label>
+      <input
+        type="number"
+        value={newItem.quantity}
+        onChange={(e) => setNewItem(prev => ({...prev, quantity: parseInt(e.target.value) || 0}))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleManualAdd(e);
+          }
+        }}
+        className="mt-1 block w-10 rounded-md border border-gray-300 px-3 py-2"
+        placeholder="0"
+        required
+      />
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700">Unit</label>
+      <input
+        type="text"
+        value={newItem.unit}
+        onChange={(e) => setNewItem(prev => ({...prev, unit: e.target.value}))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleManualAdd(e);
+          }
+        }}
+        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+        placeholder="Optional unit"
+      />
+    </div>
+    <div className="col-span-3">
+      <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        Add Item
+      </button>
+    </div>
+  </form>
+)}
 
           {addMode === 'paste' && (
             <div>
