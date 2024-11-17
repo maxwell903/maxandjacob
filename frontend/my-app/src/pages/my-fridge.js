@@ -2,7 +2,7 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link'; // Add this import
-import { ChevronDown, ChevronUp, Edit, Plus, Trash} from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit, Plus, Trash, X, Delete} from 'lucide-react';
 
 
 const GroceryListColumn = ({ fridgeItems }) => {
@@ -13,6 +13,18 @@ const GroceryListColumn = ({ fridgeItems }) => {
   const [expandedLists, setExpandedLists] = useState(new Set());
   const [editingItem, setEditingItem] = useState(null);
   const [showListDropdown, setShowListDropdown] = useState(false);
+  const handleDeleteList = async (listId) => {
+    if (window.confirm('Are you sure you want to delete this list?')) {
+      try {
+        await fetch(`http://localhost:5000/api/grocery-lists/${listId}`, {
+          method: 'DELETE'
+        });
+        fetchGroceryLists();
+      } catch (error) {
+        console.error('Error deleting list:', error);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchGroceryLists();
@@ -125,6 +137,8 @@ const GroceryListColumn = ({ fridgeItems }) => {
         </div>
       </div>
 
+
+
       <div className="space-y-4">
         {groceryLists.map(list => (
           <div
@@ -141,9 +155,15 @@ const GroceryListColumn = ({ fridgeItems }) => {
                   <Plus size={16} />
                 </button>
                 <button
-                  onClick={() => toggleListExpansion(list.id)}
+                  onClick={() => handleDeleteList(list.id)}
                   className="p-1 hover:bg-gray-100 rounded-full"
                 >
+                  <X size={16} />
+                </button>
+                <button
+                  onClick={() => toggleListExpansion(list.id)}
+                  className="p-1 hover:bg-gray-100 rounded-full"
+                  >
                   {expandedLists.has(list.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
               </div>
@@ -708,137 +728,131 @@ export default function InventoryView() {
   };
 
   const InventoryRow = ({ item, isEven, onUpdate }) => {
-       const [isUpdating, setIsUpdating] = useState(false);
-       const [localQuantity, setLocalQuantity] = useState(item.quantity);
-       const [localUnit, setLocalUnit] = useState(item.unit || '');
-     
-       const handleQuantityUpdate = async (value) => {
-         try {
-           setIsUpdating(true);
-           const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
-             method: 'PUT',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ 
-               ...item, 
-               quantity: parseInt(value, 10) || 0 
-             })
-           });
-     
-          if (!response.ok) throw new Error('Failed to update quantity');
-           
-           setLocalQuantity(parseInt(value, 10) || 0);
-           await onUpdate?.();  // Use optional chaining
-           setFridgeItems(fridgeItems.filter(i => i.id !== item.id));
-         } catch (error) {
-           console.error('Error updating quantity:', error);
-         } finally {
-           setIsUpdating(false);
-         }
-       };
-     
-       const handleUnitUpdate = async (value) => {
-         try {
-           setIsUpdating(true);
-           const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
-             method: 'PUT',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ 
-               ...item, 
-               unit: value 
-             })
-           });
-     
-           if (!response.ok) throw new Error('Failed to update unit');
-           
-           setLocalUnit(value);
-           await onUpdate?.();
-           
-         } catch (error) {
-           console.error('Error updating unit:', error);
-         } finally {
-           setIsUpdating(false);
-         }
-       };
-     
-       const handleMarkOutOfStock = async () => {
-         if (confirm('Are you sure you want to mark this item as out of stock?')) {
-           try {
-             setIsUpdating(true);
-             const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
-               method: 'PUT',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ ...item, quantity: 0 })
-             });
-     
-             if (!response.ok) throw new Error('Failed to update item');
-             
-             setLocalQuantity(0);
-             await onUpdate?.();
-             setFridgeItems(fridgeItems.filter(i => i.id !== item.id));
-           } catch (error) {
-             console.error('Error updating item:', error);
-           } finally {
-             setIsUpdating(false);
-           }
-         }
-       };
-     
-       return (
-         <div className={`grid grid-cols-5 gap-4 p-4 border-b ${isEven ? 'bg-gray-50' : 'bg-white'}`}>
-           <div>{item.name}</div>
-           <div>
-             <input
-               type="number"
-               value={localQuantity}
-               
-               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setNewItem({...newItem, quantity: e.target.value})
-                  e.preventDefault();
-                  handleManualAdd(e);
-                }
-              }}
-              className={`w-11 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
-               disabled={isUpdating}
-               min="0"
-             />
-           </div>
-           <div>
-             <input
-               type="text"
-               value={localUnit}
-               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setNewItem({...newItem, unit: e.target.value})
-                  e.preventDefault();
-                  handleManualAdd(e);
-                }
-              }}
-               className={`w-10 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
-               disabled={isUpdating}
-             />
-           </div>
-           <div>
-             <span className={`px-2 py-1 rounded-full text-sm ${
-               localQuantity > 0 
-                 ? 'bg-green-100 text-green-800' 
-                 : 'bg-red-100 text-red-800'
-             }`}>
-               {localQuantity > 0 ? 'Got It' : 'Out'}
-             </span>
-           </div>
-           <div>
-             <button
-               onClick={handleMarkOutOfStock}
-               disabled={isUpdating}
-               className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
-            >
-               Out
-             </button>
-           </div>
-         </div>
-       );
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [localQuantity, setLocalQuantity] = useState(item.quantity);
+    const [localUnit, setLocalUnit] = useState(item.unit || '');
+  
+    const handleQuantityUpdate = async () => {
+      try {
+        setIsUpdating(true);
+        const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            ...item, 
+            quantity: localQuantity 
+          })
+        });
+  
+        if (!response.ok) throw new Error('Failed to update quantity');
+  
+        await onUpdate?.();
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+      } finally {
+        setIsUpdating(false);
       }
+    };
+  
+    const handleUnitUpdate = async () => {
+      try {
+        setIsUpdating(true);
+        const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            ...item, 
+            unit: localUnit 
+          })
+        });
+  
+        if (!response.ok) throw new Error('Failed to update unit');
+  
+        await onUpdate?.();
+      } catch (error) {
+        console.error('Error updating unit:', error);
+      } finally {
+        setIsUpdating(false);
+      }
+    };
+  
+    const handleMarkOutOfStock = async () => {
+      if (confirm('Are you sure you want to mark this item as out of stock?')) {
+        try {
+          setIsUpdating(true);
+          const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...item, quantity: 0 })
+          });
+  
+          if (!response.ok) throw new Error('Failed to update item');
+  
+          setLocalQuantity(0);
+          await onUpdate?.();
+        } catch (error) {
+          console.error('Error updating item:', error);
+        } finally {
+          setIsUpdating(false);
+        }
+      }
+    };
+  
+    return (
+      <div className={`grid grid-cols-5 gap-4 p-4 border-b ${isEven ? 'bg-gray-50' : 'bg-white'}`}>
+        <div>{item.name}</div>
+        <div>
+          <input
+            type="number"
+            value={localQuantity}
+            onChange={(e) => setLocalQuantity(parseInt(e.target.value) || 0)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleQuantityUpdate();
+              }
+            }}
+            className={`w-11 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
+            disabled={isUpdating}
+            min="0"
+          />
+        </div>
+        <div>
+          <input
+            type="text"
+            value={localUnit}
+            onChange={(e) => setLocalUnit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleUnitUpdate();
+              }
+            }}
+            className={`w-10 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
+            disabled={isUpdating}
+          />
+        </div>
+        <div>
+          <span className={`px-2 py-1 rounded-full text-sm ${
+            localQuantity > 0 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-red-100 text-red-800'
+          }`}>
+            {localQuantity > 0 ? 'Got It' : 'Out'}
+          </span>
+        </div>
+        <div>
+          <button
+            onClick={handleMarkOutOfStock}
+            disabled={isUpdating}
+            className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+          >
+            Out
+          </button>
+        </div>
+      </div>
+    );
+  };
      
 
   return (
