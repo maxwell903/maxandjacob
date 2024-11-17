@@ -19,18 +19,26 @@ export default function InventoryView() {
   const [processingResults, setProcessingResults] = useState(null);
   const [inventoryFilter, setInventoryFilter] = useState('inStock');
   const router = useRouter();
+  const [groceryLists, setGroceryLists] = useState([]);
 
   useEffect(() => {
     Promise.all([
       fetch('http://localhost:5000/api/all-recipes').then(res => res.json()),
       fetch('http://localhost:5000/api/menus').then(res => res.json()),
-      fetch('http://localhost:5000/api/fridge').then(res => res.json())
-    ]).then(([recipesData, menusData, fridgeData]) => {
+      fetch('http://localhost:5000/api/fridge').then(res => res.json()),
+      fetch('http://localhost:5000/api/grocery-lists').then(res => res.json())
+    ])
+    .then(([recipesData, menusData, fridgeData, groceryListsData]) => {
       setRecipes(recipesData.recipes);
       setMenus(menusData.menus);
       setFridgeItems(fridgeData.ingredients);
+      setGroceryLists(groceryListsData.lists || []);
       setLoading(false);
-    });
+    })
+    .catch(error => {
+           console.error('Error fetching data:', error);
+           setLoading(false);
+         });
   }, []);
 
   useEffect(() => {
@@ -59,6 +67,8 @@ export default function InventoryView() {
   getFilteredInventory,
   inventoryFilter,
   setInventoryFilter,
+  groceryLists = [],
+  fridgeItems = [],
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -231,8 +241,76 @@ export default function InventoryView() {
         </button>
       </div>
 
-      {/* Two-Column Inventory Table */}
-      <div className="flex gap-4">
+       {/* Three-Column Layout */}
+      <div className="flex gap-4 w-full">
+   {/* First Inventory Column */}
+   <div className="w-1/3">
+     <div className="bg-white rounded-lg shadow">
+       <div className="grid grid-cols-5 gap-4 p-4 font-medium text-gray-700 border-b">
+         <div>Item Name</div>
+         <div>Quantity</div>
+         <div>Unit</div>
+         <div>Status</div>
+         <div>Actions</div>
+       </div>
+       {leftColumnItems.map((item, index) => (
+         <InventoryRow key={item.id || index} item={item} isEven={index % 2 === 0} />
+       ))}
+     </div>
+   </div>
+
+  {/* Second Inventory Column */}
+   <div className="w-1/3">
+     <div className="bg-white rounded-lg shadow">
+       <div className="grid grid-cols-5 gap-4 p-4 font-medium text-gray-700 border-b">
+         <div>Item Name</div>
+         <div>Quantity</div>
+         <div>Unit</div>
+         <div>Status</div>
+         <div>Actions</div>
+       </div>
+       {rightColumnItems.map((item, index) => (
+         <InventoryRow key={item.id || index} item={item} isEven={index % 2 === 0} />
+       ))}
+     </div>
+   </div>
+   {/* Grocery Lists Column */}
+   <div className="w-1/3">
+     <div className="bg-white rounded-lg shadow p-4">
+       <h2 className="text-xl font-semibold mb-4">Grocery Lists</h2>
+       {Array.isArray(groceryLists) && groceryLists.map((list) => (
+         <div key={list.id} className="mb-4">
+           <button
+             onClick={() => {
+               const elem = document.getElementById(`list-${list.id}`);
+               if (elem) {
+                 elem.classList.toggle('hidden');
+               }
+             }}
+             className="flex items-center justify-between w-full p-2 bg-gray-50 hover:bg-gray-100 rounded"
+           >
+             <span>{list.name}</span>
+             <ChevronDown size={20} />
+           </button>
+           <div id={`list-${list.id}`} className="hidden mt-2 pl-4">
+             {Array.isArray(list.items) && list.items.map((item) => {
+               const isInStock = fridgeItems.some(
+                 (fridgeItem) => 
+                   fridgeItem.name.toLowerCase() === item.name.toLowerCase().replace(/[*•\[\]]/g, '').trim() && 
+                   fridgeItem.quantity > 0
+               );
+               return (
+                 <div key={item.id} className={`p-2 ${isInStock ? 'text-green-600' : 'text-red-600'}`}>
+                   {item.name.replace(/[*•\[\]]/g, '').trim()}
+                 </div>
+               );
+             })}
+           </div>
+         </div>
+       ))}
+     </div>
+   </div>
+ </div>
         {/* Left Column */}
         <div className="flex-1">
           <div className="bg-white rounded-lg shadow">
@@ -245,6 +323,45 @@ export default function InventoryView() {
             </div>
             {leftColumnItems.map((item, index) => (
               <InventoryRow key={item.id || index} item={item} isEven={index % 2 === 0} />
+            ))}
+          </div>
+        </div>
+      
+
+        {/* New Grocery Lists Column */}
+        <div className="w-1/3">
+          <div className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-xl font-semibold mb-4">Grocery Lists</h2>
+            
+              {Array.isArray(groceryLists) && groceryLists.map((list) => (
+              <div key={list.id} className="mb-4">
+                <button
+                  onClick={() => {
+                    const elem = document.getElementById(`list-${list.id}`);
+                    if (elem) {
+                      elem.classList.toggle('hidden');
+                    }
+                  }}
+                  className="flex items-center justify-between w-full p-2 bg-gray-50 hover:bg-gray-100 rounded"
+                >
+                  <span>{list.name}</span>
+                  <ChevronDown size={20} />
+                </button>
+                <div id={`list-${list.id}`} className="hidden mt-2 pl-4">
+                {Array.isArray(list.items) && list.items.map((item) => {
+                    const isInStock = fridgeItems.some(
+                      (fridgeItem) => 
+                        fridgeItem.name.toLowerCase() === item.name.toLowerCase().replace(/[*•\[\]]/g, '').trim() && 
+                        fridgeItem.quantity > 0
+                    );
+                    return (
+                      <div key={item.id} className={`p-2 ${isInStock ? 'text-green-600' : 'text-red-600'}`}>
+                        {item.name.replace(/[*•\[\]]/g, '').trim()}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -265,7 +382,7 @@ export default function InventoryView() {
           </div>
         </div>
       </div>
-    </div>
+    
   );
 };
 
@@ -462,6 +579,8 @@ const InventoryRow = ({ item, isEven }) => {
          getFilteredInventory={getFilteredInventory}
          inventoryFilter={inventoryFilter}
          setInventoryFilter={setInventoryFilter}
+         groceryLists={groceryLists || []}
+        fridgeItems={fridgeItems || []}
        />
         {loading && (
           <div className="text-center py-8">
