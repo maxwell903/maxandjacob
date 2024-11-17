@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link'; // Add this import
 import { ChevronDown, ChevronUp, Edit, Plus, Trash, X, Delete} from 'lucide-react';
 
 
-const GroceryListColumn = ({ fridgeItems }) => {
+export const GroceryListColumn = ({ fridgeItems }) => {
   const [groceryLists, setGroceryLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
@@ -13,6 +13,120 @@ const GroceryListColumn = ({ fridgeItems }) => {
   const [expandedLists, setExpandedLists] = useState(new Set());
   const [editingItem, setEditingItem] = useState(null);
   const [showListDropdown, setShowListDropdown] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(0);
+
+  const cleanText = useCallback((text) => {
+    let color = 'text-gray-900';
+    const colorMatch = text.match(/\[(.*?)\]/);
+    if (colorMatch) {
+      const extractedColor = colorMatch[1];
+      switch (extractedColor) {
+        case 'green':
+          color = 'text-green-600';
+          break;
+        case 'red':
+          color = 'text-red-600';
+          break;
+        default:
+          color = 'text-gray-900';
+      }
+    }
+    return {
+      text: text.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim(),
+      color
+    };
+  }, []);
+
+  const getItemColor = useCallback((itemName) => {
+    const matchingFridgeItem = fridgeItems.find(item => 
+      item.name.toLowerCase() === itemName.toLowerCase()
+    );
+    return matchingFridgeItem?.quantity > 0 ? 'green' : 'red';
+  }, [fridgeItems]);
+
+  const shouldUpdateItemColor = useCallback((itemName, currentColor) => {
+    const newColor = getItemColor(itemName);
+    return currentColor !== newColor;
+  }, [getItemColor]);
+
+  const fetchGroceryLists = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/grocery-lists');
+      const data = await response.json();
+      setGroceryLists(data.lists || []);
+    } catch (error) {
+      console.error('Error fetching grocery lists:', error);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchGroceryLists();
+  }, [fetchGroceryLists]);
+
+  // Color synchronization effect
+  useEffect(() => {
+    const now = Date.now();
+    if (now - lastSyncTime < 1000) return;
+
+    const updateColors = async () => {
+      const updates = [];
+      
+      groceryLists.forEach(list => {
+        list.items.forEach(item => {
+          const cleanedItem = cleanText(item.name);
+          const currentColor = cleanedItem.text.includes('[green]') ? 'green' : 'red';
+          
+          if (shouldUpdateItemColor(cleanedItem.text, currentColor)) {
+            updates.push({
+              listId: list.id,
+              itemId: item.id,
+              itemName: cleanedItem.text
+            });
+          }
+        });
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates.map(async ({ listId, itemId, itemName }) => {
+          const newColor = getItemColor(itemName);
+          await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: `[${newColor}]• ${itemName}` }),
+          });
+        }));
+        
+        setLastSyncTime(now);
+        fetchGroceryLists();
+      }
+    };
+
+    updateColors();
+  }, [fridgeItems, groceryLists, cleanText, getItemColor, shouldUpdateItemColor, lastSyncTime, fetchGroceryLists]);
+
+  const handleAddItem = async (listId) => {
+    if (!newItemName.trim()) return;
+    
+    try {
+      const colorPrefix = getItemColor(newItemName);
+      
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `[${colorPrefix}]• ${newItemName}` }),
+      });
+
+      if (response.ok) {
+        setNewItemName('');
+        setShowAddItemModal(false);
+        fetchGroceryLists();
+      }
+    } catch (error) {
+      console.error('Error adding item:', error);
+    }
+  };
+
   const handleDeleteList = async (listId) => {
     if (window.confirm('Are you sure you want to delete this list?')) {
       try {
@@ -23,40 +137,6 @@ const GroceryListColumn = ({ fridgeItems }) => {
       } catch (error) {
         console.error('Error deleting list:', error);
       }
-    }
-  };
-
-  useEffect(() => {
-    fetchGroceryLists();
-  }, []);
-
-  const fetchGroceryLists = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/grocery-lists');
-      const data = await response.json();
-      setGroceryLists(data.lists || []);
-    } catch (error) {
-      console.error('Error fetching grocery lists:', error);
-    }
-  };
-
-  const handleAddItem = async (listId) => {
-    if (!newItemName.trim()) return;
-    
-    try {
-      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `[black]• ${newItemName}` }),
-      });
-
-      if (response.ok) {
-        setNewItemName('');
-        setShowAddItemModal(false);
-        fetchGroceryLists();
-      }
-    } catch (error) {
-      console.error('Error adding item:', error);
     }
   };
 
@@ -73,10 +153,11 @@ const GroceryListColumn = ({ fridgeItems }) => {
 
   const handleEditItem = async (listId, itemId, newName) => {
     try {
+      const colorPrefix = getItemColor(newName);
       await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `[black]• ${newName}` }),
+        body: JSON.stringify({ name: `[${colorPrefix}]• ${newName}` }),
       });
       setEditingItem(null);
       fetchGroceryLists();
@@ -93,16 +174,6 @@ const GroceryListColumn = ({ fridgeItems }) => {
       newExpanded.add(listId);
     }
     setExpandedLists(newExpanded);
-  };
-
-  const cleanText = (text) => {
-    let color = 'text-gray-900';
-    if (text.includes('[green]')) color = 'text-green-600';
-    if (text.includes('[red]')) color = 'text-red-600';
-    return {
-      text: text.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim(),
-      color
-    };
   };
 
   return (
@@ -137,8 +208,6 @@ const GroceryListColumn = ({ fridgeItems }) => {
         </div>
       </div>
 
-
-
       <div className="space-y-4">
         {groceryLists.map(list => (
           <div
@@ -163,7 +232,7 @@ const GroceryListColumn = ({ fridgeItems }) => {
                 <button
                   onClick={() => toggleListExpansion(list.id)}
                   className="p-1 hover:bg-gray-100 rounded-full"
-                  >
+                >
                   {expandedLists.has(list.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
               </div>
@@ -365,12 +434,16 @@ export default function InventoryView() {
   groceryLists = [],
   fridgeItems = [],
   onInventoryUpdate,
+  
 }) => {
   
   const [isFormOpen, setIsFormOpen] = useState(true);  // Add this line
-  
-  
-  const filteredItems = getFilteredInventory();
+  const [filteredItems, setFilteredItems] = useState([]);
+  useEffect(() => {
+    setFilteredItems(getFilteredInventory());
+   }, [fridgeItems, inventoryFilter]);
+
+
   const midPoint = Math.ceil(filteredItems.length / 2);
   const leftColumnItems = filteredItems.slice(0, midPoint);
   const rightColumnItems = filteredItems.slice(midPoint);
@@ -570,7 +643,7 @@ export default function InventoryView() {
             inventoryFilter === 'inStock' ? 'bg-blue-600 text-white' : 'bg-gray-200'
           }`}
         >
-          In My Fridge
+          In My Fridge ({fridgeItems.filter(item => item.quantity > 0).length})
         </button>
         <button
           onClick={() => setInventoryFilter('needed')}
@@ -578,7 +651,7 @@ export default function InventoryView() {
             inventoryFilter === 'needed' ? 'bg-blue-600 text-white' : 'bg-gray-200'
           }`}
         >
-          Need to Get
+          Need to Get ({fridgeItems.filter(item => item.quantity === 0).length})
         </button>
         <button
           onClick={() => setInventoryFilter('all')}
@@ -586,7 +659,7 @@ export default function InventoryView() {
             inventoryFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200'
           }`}
         >
-          View All
+          View All ({fridgeItems.length})
         </button>
       </div>
 
@@ -732,7 +805,7 @@ export default function InventoryView() {
     const [localQuantity, setLocalQuantity] = useState(item.quantity);
     const [localUnit, setLocalUnit] = useState(item.unit || '');
   
-    const handleQuantityUpdate = async () => {
+    const handleUpdate = async (updateData) => {
       try {
         setIsUpdating(true);
         const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
@@ -740,61 +813,33 @@ export default function InventoryView() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             ...item, 
-            quantity: localQuantity 
-          })
-        });
-  
-        if (!response.ok) throw new Error('Failed to update quantity');
-  
-        await onUpdate?.();
-      } catch (error) {
-        console.error('Error updating quantity:', error);
-      } finally {
-        setIsUpdating(false);
-      }
-    };
-  
-    const handleUnitUpdate = async () => {
-      try {
-        setIsUpdating(true);
-        const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            ...item, 
+            ...updateData,
             unit: localUnit 
           })
         });
   
-        if (!response.ok) throw new Error('Failed to update unit');
-  
-        await onUpdate?.();
+        if (!response.ok) throw new Error('Failed to update item');
+        const result = await response.json();
+             // Immediately update the local fridgeItems state
+             setFridgeItems(prev => prev.map(i => 
+               i.id === item.id ? { ...i, ...updateData } : i
+             ));
+             await onUpdate?.();
+        
       } catch (error) {
-        console.error('Error updating unit:', error);
+        console.error('Error updating item: ', error);
       } finally {
         setIsUpdating(false);
       }
     };
+
+    const handleQuantityUpdate = () => handleUpdate({ quantity: localQuantity });
+    const handleUnitUpdate = () => handleUpdate({ unit: localUnit });
   
     const handleMarkOutOfStock = async () => {
       if (confirm('Are you sure you want to mark this item as out of stock?')) {
-        try {
-          setIsUpdating(true);
-          const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...item, quantity: 0 })
-          });
-  
-          if (!response.ok) throw new Error('Failed to update item');
-  
-          setLocalQuantity(0);
-          await onUpdate?.();
-        } catch (error) {
-          console.error('Error updating item:', error);
-        } finally {
-          setIsUpdating(false);
-        }
+        await handleUpdate({ quantity: 0 });
+        setLocalQuantity(0);
       }
     };
   
@@ -806,10 +851,11 @@ export default function InventoryView() {
             type="number"
             value={localQuantity}
             onChange={(e) => setLocalQuantity(parseInt(e.target.value) || 0)}
+            onBlur={handleQuantityUpdate}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleQuantityUpdate();
+                e.target.blur();
               }
             }}
             className={`w-11 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
@@ -822,10 +868,11 @@ export default function InventoryView() {
             type="text"
             value={localUnit}
             onChange={(e) => setLocalUnit(e.target.value)}
+            onBlur={handleQuantityUpdate}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleUnitUpdate();
+                e.target.blur();
               }
             }}
             className={`w-10 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
