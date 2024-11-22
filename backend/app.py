@@ -754,7 +754,23 @@ def delete_recipe(recipe_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
+    
+@app.route('/api/grocery-lists/<int:list_id>')
+def get_grocery_list(list_id):
+     try:
+         grocery_list = GroceryList.query.get_or_404(list_id)
+         return jsonify({
+             'id': grocery_list.id,
+             'name': grocery_list.name,
+             'items': [{
+                 'id': item.id,
+                 'name': item.name
+             } for item in grocery_list.items]
+         })
+     except Exception as e:
+         print(f"Error fetching grocery list: {str(e)}")
+         return jsonify({'error': str(e)}), 500
+     
 if __name__ == '__main__':
    with app.app_context():
        db.create_all()
