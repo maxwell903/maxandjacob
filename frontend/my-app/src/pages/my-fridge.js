@@ -32,6 +32,12 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists }) => {
     }
   };
 
+  useEffect(() => {
+    setLocalQuantity(item.quantity);
+    setLocalUnit(item.unit || '');
+  }, [item]);
+
+
   const handleQuantityUpdate = useCallback(() => handleUpdate({ quantity: localQuantity }), [localQuantity]);
   const handleUnitUpdate = useCallback(() => handleUpdate({ unit: localUnit }), [localUnit]);
 
@@ -135,7 +141,7 @@ export default function InventoryView() {
          const matchesNeeded = neededItems.some(item => namesMatch(item.name, groceryItem.name));
          const matchesInStock = inStockItems.some(item => namesMatch(item.name, groceryItem.name));
          
-         if (inventoryFilter === 'needed') {
+         if (inventoryFilter === 'needed' || inventoryFilter == 'inStock') {
            if (matchesNeeded) {
              acc.matchingNeeded.push(groceryItem);
            } else if (matchesInStock) {
@@ -541,85 +547,81 @@ export default function InventoryView() {
        <ChevronDown className={`w-4 h-4 transition-transform ${showGroceryListItems ? 'rotate-180' : ''}`} />
      </button>
      {showGroceryListItems && (
-       <div className="absolute z-10 w-64 mt-2 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 max-h-96 overflow-y-auto">
-         <div className="py-1 px-4" role="menu" aria-orientation="vertical">
-           {(() => {
-             const { matchingNeeded, matchingInStock, other } = getFilteredGroceryListItems();
-             
-             return (
-               <>
-                 {inventoryFilter === 'needed' ? (
-                   <>
-                     {matchingNeeded.length > 0 && (
-                       <div className="mb-2">
-                         <div className="text-xs font-medium text-gray-500 mb-1">Needed Items:</div>
-                         {matchingNeeded.map((item, idx) => {
-   const name = item.name.replace(/\[(red|green)\]•/, '•');
-   if (name.startsWith('###')) {
-     return (
-       <div key={idx} className="text-lg font-bold text-gray-900 py-2">
-         {name.replace(/###/g, '').trim()}
-       </div>
-     );
-   } else if (name.startsWith('**')) {
-     return (
-       <div key={idx} className="font-bold text-gray-900 py-1">
-         {name.replace(/\*\*/g, '').trim()}
-       </div>
-     );
-   } else {
-     return (
-       <div key={idx} className="text-sm text-red-600 py-1">
-         {name}
-       </div>
-     );
-   }
- })}
-                       </div>
-                     )}
-                     {matchingInStock.length > 0 && (
-                       <div className="mb-2">
-                         <div className="text-xs font-medium text-gray-500 mb-1">In Stock Items:</div>
-                         {matchingInStock.map((item, idx) => {
-   const name = item.name.replace(/\[(red|green)\]•/, '•');
-   if (name.startsWith('###')) {
-     return (
-       <div key={idx} className="text-lg font-bold text-gray-900 py-2">
-         {name.replace(/###/g, '').trim()}
-       </div>
-     );
-   } else if (name.startsWith('**')) {
-     return (
-       <div key={idx} className="font-bold text-gray-900 py-1">
-         {name.replace(/\*\*/g, '').trim()}
-       </div>
-     );
-   } else {
-     return (
-      <div key={idx} className="text-sm text-green-600 py-1">
-         {name}
-       </div>
-    );
-   }
- })}
-                       </div>
-                     )}
-                   </>
-                 ) : (
-                   <div>
-                     {other.map((item, idx) => (
-                       <div key={idx} className="text-sm text-gray-700 py-1">
-                         {item.name}
-                       </div>
-                     ))}
-                   </div>
-                 )}
-               </>
-             );
-           })()}
-        </div>
-      </div>
-     )}
+  <div className="absolute z-10 w-64 mt-2 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 max-h-96 overflow-y-auto">
+    <div className="py-1 px-4" role="menu" aria-orientation="vertical">
+      {(() => {
+        const { matchingInStock, matchingNeeded, other } = getFilteredGroceryListItems();
+        
+        const renderItem = (item, idx) => {
+          const name = item.name.replace(/\[(red|green)\]•/, '•');
+          if (name.startsWith('###')) {
+            return (
+              <div key={idx} className="text-lg font-bold text-gray-900 py-2">
+                {name.replace(/###/g, '').trim()}
+              </div>
+            );
+          } else if (name.startsWith('**')) {
+            return (
+              <div key={idx} className="font-bold text-gray-900 py-1">
+                {name.replace(/\*\*/g, '').trim()}
+              </div>
+            );
+          } else {
+            const isInStock = matchingInStock.includes(item);
+            return (
+              <div key={idx} className={`text-sm ${isInStock ? 'text-green-600' : 'text-red-600'} py-1`}>
+                {name}
+              </div>
+            );
+          }
+        };
+
+        return (
+          <>
+            {inventoryFilter === 'needed' ? (
+              // Needed items filter - show needed items first
+              <>
+                {matchingNeeded.length > 0 && (
+                  <div className="mb-2">
+                    <div className="text-xs font-medium text-gray-500 mb-1">Needed Items:</div>
+                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`))}
+                  </div>
+                )}
+                {matchingInStock.length > 0 && (
+                  <div className="mb-2">
+                    <div className="text-xs font-medium text-gray-500 mb-1">In Stock Items:</div>
+                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`))}
+                  </div>
+                )}
+              </>
+            ) : inventoryFilter === 'inStock' ? (
+              // In Stock filter - show in stock items first
+              <>
+                {matchingInStock.length > 0 && (
+                  <div className="mb-2">
+                    <div className="text-xs font-medium text-gray-500 mb-1">In Stock Items:</div>
+                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`))}
+                  </div>
+                )}
+                {matchingNeeded.length > 0 && (
+                  <div className="mb-2">
+                    <div className="text-xs font-medium text-gray-500 mb-1">Needed Items:</div>
+                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`))}
+                  </div>
+                )}
+              </>
+            ) : (
+              // All items view
+              <div>
+                {other.map((item, idx) => renderItem(item, `other-${idx}`))}
+              </div>
+            )}
+          </>
+        );
+      })()}
+    </div>
+  </div>
+)}
    </div>
  )}
  </div>
