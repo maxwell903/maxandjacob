@@ -399,8 +399,10 @@ def parse_receipt():
         all_ingredients = ingredient_query.union(fridge_query).all()
         ingredient_names = {i[0].lower() for i in all_ingredients}
         
-        matched_items = {}
-        unmatched_items = set()
+        matched_items = set()  # Changed to set since we're only tracking existence
+        unmatched_items = []  # Track unmatched items
+        unmatched_results = []  # Track results of adding unmatched items
+        matched_results = []  # Track results of matched items
         
         # Process each line
         for line in cleaned_lines:
@@ -411,7 +413,7 @@ def parse_receipt():
             
             # First try exact match
             if line in ingredient_names:
-                matched_items[line] = matched_items.get(line, 0) + 1
+                matched_items.add(line)
                 matched = True
                 continue
             
@@ -440,61 +442,73 @@ def parse_receipt():
                         best_match = db_ingredient
             
             if best_match:
-                matched_items[best_match] = matched_items.get(best_match, 0) + 1
+                matched_items.add(best_match)
                 matched = True
             
-            # If no match found, add as new ingredient to both unmatched items and database
-            if not matched and len(line.split()) <= 3:  # Limit to reasonable length to avoid junk entries
-                unmatched_items.add(line)
-                # Add unmatched item to FridgeItem with quantity 0
+            # If no match found and reasonable length (prevent junk entries)
+            if not matched and len(line.split()) <= 3:
+                # Format the item name properly (capitalize first letter of each word)
+                formatted_name = ' '.join(word.capitalize() for word in line.split())
+                unmatched_items.append(formatted_name)
+                
+                # Add or update item in FridgeItem
                 existing_item = FridgeItem.query.filter(
                     func.lower(FridgeItem.name) == func.lower(line)
                 ).first()
                 
-                if not existing_item:
+                if existing_item:
+                    existing_item.quantity += 1  # Increment quantity by 1
+                    unmatched_results.append({
+                        'ingredient': formatted_name,
+                        'action': 'updated',
+                        'current_total': existing_item.quantity
+                    })
+                else:
                     new_item = FridgeItem(
-                        name=line.title(),  # Capitalize first letter of each word
-                        quantity=0,
+                        name=formatted_name,
+                        quantity=1,
                         unit=''
                     )
                     db.session.add(new_item)
+                    unmatched_results.append({
+                        'ingredient': formatted_name,
+                        'action': 'added',
+                        'current_total': 1
+                    })
         
-        # Update database with matches
-        results = []
-        for ingredient, quantity in matched_items.items():
+        # Update database with matched items
+        for ingredient in matched_items:
             # Check for existing item (case-insensitive)
             existing_item = FridgeItem.query.filter(
                 func.lower(FridgeItem.name) == func.lower(ingredient)
             ).first()
             
             if existing_item:
-                # Update existing item
-                existing_item.quantity += quantity
-                results.append({
+                existing_item.quantity += 1  # Increment quantity by 1
+                matched_results.append({
                     'matched_ingredient': ingredient,
-                    'quantity': quantity,
                     'action': 'updated',
                     'current_total': existing_item.quantity
                 })
             else:
-                # Add new item
                 fridge_item = FridgeItem(
                     name=ingredient,
-                    quantity=quantity
+                    quantity=1
                 )
                 db.session.add(fridge_item)
-                results.append({
+                matched_results.append({
                     'matched_ingredient': ingredient,
-                    'quantity': quantity,
                     'action': 'added',
-                    'current_total': quantity
+                    'current_total': 1
                 })
 
         db.session.commit()
+        
         return jsonify({
-            'matched_items': results,
-            'unmatched_items': list(unmatched_items),
-            'total_matches': len(results)
+            'matched_items': matched_results,
+            'unmatched_items': unmatched_items,
+            'unmatched_results': unmatched_results,
+            'total_matches': len(matched_results)
         })
     except Exception as e:
         db.session.rollback()
