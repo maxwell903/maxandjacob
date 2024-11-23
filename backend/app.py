@@ -380,30 +380,85 @@ def add_fridge_item():
 def parse_receipt():
     try:
         data = request.json
-        receipt_text = data['receipt_text'].lower()
-        words = ' '.join(receipt_text.split('\n')).split()
+        receipt_text = data['receipt_text']
+        
+        # Split text into lines and process each line
+        lines = receipt_text.strip().split('\n')
+        
+        # Clean and normalize each line
+        def clean_line(line):
+            # Remove special characters and numbers, convert to lowercase
+            cleaned = ''.join(char for char in line if char.isalpha() or char.isspace())
+            return ' '.join(cleaned.lower().split())  # Normalize whitespace
+            
+        cleaned_lines = [clean_line(line) for line in lines if clean_line(line)]  # Remove empty lines
+        
+        # Get all unique ingredients from both Ingredient and FridgeItem tables
+        ingredient_query = db.session.query(Ingredient.name).distinct()
+        fridge_query = db.session.query(FridgeItem.name).distinct()
+        all_ingredients = ingredient_query.union(fridge_query).all()
+        ingredient_names = {i[0].lower() for i in all_ingredients}
+        
         matched_items = {}
         unmatched_items = set()
-
-        # Get all unique ingredients from database for matching
-        ingredients = db.session.query(Ingredient.name).distinct().all()
-        ingredient_names = {i[0].lower() for i in ingredients}
         
-        # First pass: find exact matches
-        for word in words:
-            if word in ingredient_names:
-                matched_items[word] = matched_items.get(word, 0) + 1
-            else:
-                unmatched_items.add(word)
-
-        # Second pass: check for partial matches in remaining unmatched items
-        for word in list(unmatched_items):
-            for ing_name in ingredient_names:
-                if ing_name in word:
-                    matched_items[ing_name] = matched_items.get(ing_name, 0) + 1
-                    unmatched_items.remove(word)
-                    break
-
+        # Process each line
+        for line in cleaned_lines:
+            if not line:  # Skip empty lines
+                continue
+                
+            matched = False
+            
+            # First try exact match
+            if line in ingredient_names:
+                matched_items[line] = matched_items.get(line, 0) + 1
+                matched = True
+                continue
+            
+            # Try partial matches for multi-word items
+            best_match = None
+            best_score = 0
+            
+            for db_ingredient in ingredient_names:
+                # Check if ingredient words are contained in the line
+                db_words = set(db_ingredient.split())
+                line_words = set(line.split())
+                
+                # Calculate word overlap ratio
+                common_words = db_words.intersection(line_words)
+                if common_words:
+                    overlap_ratio = len(common_words) / max(len(db_words), len(line_words))
+                    
+                    # Use fuzzy string matching for additional accuracy
+                    fuzzy_ratio = fuzz.ratio(db_ingredient, line) / 100
+                    
+                    # Combined score weighing both word overlap and fuzzy matching
+                    score = (overlap_ratio * 0.7) + (fuzzy_ratio * 0.3)
+                    
+                    if score > best_score and score > 0.6:  # Threshold for matching
+                        best_score = score
+                        best_match = db_ingredient
+            
+            if best_match:
+                matched_items[best_match] = matched_items.get(best_match, 0) + 1
+                matched = True
+            
+            # If no match found, add as new ingredient to both unmatched items and database
+            if not matched and len(line.split()) <= 3:  # Limit to reasonable length to avoid junk entries
+                unmatched_items.add(line)
+                # Add unmatched item to FridgeItem with quantity 0
+                existing_item = FridgeItem.query.filter(
+                    func.lower(FridgeItem.name) == func.lower(line)
+                ).first()
+                
+                if not existing_item:
+                    new_item = FridgeItem(
+                        name=line.title(),  # Capitalize first letter of each word
+                        quantity=0,
+                        unit=''
+                    )
+                    db.session.add(new_item)
+        
         # Update database with matches
         results = []
         for ingredient, quantity in matched_items.items():
@@ -445,7 +500,6 @@ def parse_receipt():
         db.session.rollback()
         print(f"Error in parse_receipt: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/fridge')
 def get_fridge_items():
