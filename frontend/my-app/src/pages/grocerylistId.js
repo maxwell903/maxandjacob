@@ -55,18 +55,30 @@ function GroceryListsPage() {
   }, []);
 
   const getItemColor = (itemName) => {
-    // Clean the item name by removing any existing formatting
-    const cleanName = itemName.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim();
+    if (!itemName) return 'black';
+    
+    // Clean the name and convert to lowercase for comparison
+    const cleanName = itemName.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim().toLowerCase();
     
     // Find matching fridge item
     const fridgeItem = fridgeItems.find(item => 
-      item.name.toLowerCase() === cleanName.toLowerCase()
+      item.name.toLowerCase() === cleanName
     );
-
-    if (!fridgeItem) return 'black';
-    return fridgeItem.quantity > 0 ? 'green' : 'red';
+  
+    // If we found a fridge item, color based on quantity
+    if (fridgeItem) {
+      return fridgeItem.quantity > 0 ? 'green' : 'red';
+    }
+    
+    // If item is in recipe ingredients but not in fridge, mark as red
+    const isInRecipes = ingredients.includes(cleanName);
+    if (isInRecipes) {
+      return 'red';
+    }
+    
+    // Only return black if item is not recognized at all
+    return 'red';
   };
-
   const formatItemName = (name) => {
     // Remove existing formatting
     const cleanName = name.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim();
@@ -187,7 +199,7 @@ function GroceryListsPage() {
 
       for (const ingredient of recipe.ingredients) {
         const cleanName = ingredient.trim();
-        let colorPrefix = '[black]';
+        let colorPrefix = '';
 
         const inFridge = fridgeItems.some(item => 
           item.name.toLowerCase() === cleanName.toLowerCase() && 
@@ -254,7 +266,7 @@ function GroceryListsPage() {
 
         for (const ingredient of recipe.ingredients) {
           const cleanName = ingredient.trim();
-          let colorPrefix = '[black]';
+          let colorPrefix = '';
 
           const inFridge = fridgeItems.some(item => 
             item.name.toLowerCase() === cleanName.toLowerCase() && 

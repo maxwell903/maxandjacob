@@ -32,6 +32,23 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists }) => {
     }
   };
 
+  const handleDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${item.name} from your fridge?`)) {
+      try {
+        const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error('Failed to delete item');
+        await onUpdate?.();
+      } catch (error) {
+        console.error('Error deleting item:', error);
+      }
+    }
+  };
+
+
   useEffect(() => {
     setLocalQuantity(item.quantity);
     setLocalUnit(item.unit || '');
@@ -44,7 +61,17 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists }) => {
 
   return (
     <div className={`grid grid-cols-3 gap-4 p-4 border-b ${isEven ? 'bg-gray-50' : 'bg-white'}`}>
-          <div className="w-48">
+        
+        <div className="w-48 flex items-center gap-2">
+        <button
+          onClick={handleDelete}
+          className="text-red-500 hover:text-red-700 transition-colors"
+          title="Delete item"
+        >
+          <X size={20} />
+        </button>
+
+
             <span className="text-sm">{item.name}</span>
           </div>
           <div className="flex items-center gap-2 w-48">
@@ -126,6 +153,16 @@ export default function InventoryView() {
      };
 
 
+     const getItemColor = useCallback((itemName) => {
+      if (!itemName) return 'black';
+      // Clean the name and convert to lowercase for comparison
+      const cleanName = itemName.replace(/[*•]/, '').trim().toLowerCase();
+      const matchingFridgeItem = fridgeItems.find(item => 
+        item.name.toLowerCase() === cleanName
+      );
+      if (!matchingFridgeItem) return 'black';
+      return matchingFridgeItem.quantity > 0 ? 'green' : 'red';
+    }, [fridgeItems]);
 
 
 
@@ -138,8 +175,14 @@ export default function InventoryView() {
        const inStockItems = fridgeItems.filter(item => item.quantity > 0);
        
        return selectedGroceryListItems.items.reduce((acc, groceryItem) => {
-         const matchesNeeded = neededItems.some(item => namesMatch(item.name, groceryItem.name));
-         const matchesInStock = inStockItems.some(item => namesMatch(item.name, groceryItem.name));
+        const cleanName = groceryItem.name.replace(/\[.*?\]/, '').replace(/[*•]/, '').trim().toLowerCase();
+        
+        const matchesNeeded = neededItems.some(item => 
+          item.name.toLowerCase() === cleanName
+        );
+        const matchesInStock = inStockItems.some(item => 
+          item.name.toLowerCase() === cleanName
+        );
          
          if (inventoryFilter === 'needed' || inventoryFilter == 'inStock') {
            if (matchesNeeded) {
