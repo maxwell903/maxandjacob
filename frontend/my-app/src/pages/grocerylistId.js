@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Plus, Edit, Trash } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Edit, Trash, X } from 'lucide-react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { jsx } from 'react/jsx-runtime';
@@ -48,7 +48,7 @@ function GroceryListsPage() {
     fetchData();
 
     // Set up polling interval
-    const interval = setInterval(fetchData, 1000); // Poll every second
+    const interval = setInterval(fetchData, 100000); // Poll every second
 
     // Cleanup
     return () => clearInterval(interval);
@@ -326,8 +326,18 @@ function GroceryListsPage() {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
-          <h3 className="text-lg font-semibold mb-4">Select Recipe</h3>
+        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto relative">
+          {/* Added header section with cancel button */}
+          <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-2 border-b">
+            <h3 className="text-lg font-semibold">Select Recipe</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
           {loading ? (
             <p>Loading recipes...</p>
           ) : (
@@ -346,7 +356,8 @@ function GroceryListsPage() {
               ))}
             </div>
           )}
-          <div className="mt-4 flex justify-end">
+          
+          <div className="mt-4 flex justify-end border-t pt-4">
             <button
               onClick={onClose}
               className="px-4 py-2 text-gray-600 hover:text-gray-800"

@@ -235,37 +235,76 @@ export default function MenuDetail() {
         </div>
   
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((recipe) => (
-            <div key={recipe.id} className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl">
-              <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                {recipe.name}
-              </h3>
-              <p className="mb-4 text-gray-600">{recipe.description}</p>
-              <div className="mb-4">
-                <h4 className="font-medium mb-2">Ingredients:</h4>
-                <ul className="space-y-1">
-                  {Array.isArray(recipe.ingredients) && recipe.ingredients.map((ingredient, idx) => (
-                    <li 
-                      key={idx} 
-                      className={getIngredientColor(ingredient)}
-                    >
-                      {ingredient}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <p className="text-sm text-gray-500">
-                Prep time: {recipe.prep_time} mins
-              </p>
-              <Link 
-                href={`/recipe/${recipe.id}`}
-                className="mt-4 inline-block text-blue-600 hover:text-blue-700"
-              >
-                View Recipe →
-              </Link>
-            </div>
+  {recipes.map((recipe) => (
+    <div key={recipe.id} className="relative rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl">
+      {/* Add delete button */}
+      <button
+        onClick={async (e) => {
+          e.preventDefault(); // Prevent card click event
+          if (window.confirm(`Remove ${recipe.name} from menu?`)) {
+            try {
+              const response = await fetch(`http://localhost:5000/api/menus/${menuId}/recipes/${recipe.id}`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (!response.ok) throw new Error('Failed to remove recipe from menu');
+
+              // Refresh menu recipes
+              fetchMenuRecipes();
+            } catch (error) {
+              console.error('Error removing recipe:', error);
+              setError('Failed to remove recipe from menu');
+            }
+          }
+        }}
+        className="absolute top-2 right-2 p-1 rounded-full bg-red-100 hover:bg-red-200 transition-colors"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-5 w-5 text-red-600"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+
+      <h3 className="mb-2 text-lg font-semibold text-gray-900">
+        {recipe.name}
+      </h3>
+      <p className="mb-4 text-gray-600">{recipe.description}</p>
+      <div className="mb-4">
+        <h4 className="font-medium mb-2">Ingredients:</h4>
+        <ul className="space-y-1">
+          {Array.isArray(recipe.ingredients) && recipe.ingredients.map((ingredient, idx) => (
+            <li 
+              key={idx} 
+              className={getIngredientColor(ingredient)}
+            >
+              {ingredient}
+            </li>
           ))}
-        </div>
+        </ul>
+      </div>
+      <p className="text-sm text-gray-500">
+        Prep time: {recipe.prep_time} mins
+      </p>
+      <Link 
+        href={`/recipe/${recipe.id}`}
+        className="mt-4 inline-block text-blue-600 hover:text-blue-700"
+      >
+        View Recipe →
+      </Link>
+    </div>
+  ))}
+</div>
   
         {showGroceryListModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
