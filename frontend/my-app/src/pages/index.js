@@ -103,6 +103,13 @@ export default function Home() {
               >
                 My Menus
               </Link>
+              <Link 
+    href="/grocery-bill"
+    className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
+    onClick={() => localStorage.setItem('previousPath', '/')}
+  >
+    Grocery Bill
+  </Link>
             </div>
 
             {error && (
