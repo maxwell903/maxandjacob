@@ -1,549 +1,450 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Plus, Edit, Trash, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Edit, Trash, X, Check } from 'lucide-react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { jsx } from 'react/jsx-runtime';
 
+// Modal Components
+const RecipeSelectionModal = ({ listId, onClose, onSelect }) => {
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-function GroceryListsPage() {
-  const [lists, setLists] = useState([]);
-  const [expandedList, setExpandedList] = useState(null);
-  const [newList, setNewList] = useState({ name: '', items: [''] });
-  const [showForm, setShowForm] = useState(false);
-  const [fridgeItems, setFridgeItems] = useState([]);
-  const [ingredients, setIngredients] = useState([]);
-  const [showIngredientsMenu, setShowIngredientsMenu] = useState(false);
-  const [selectedIngredient, setSelectedIngredient] = useState('');
-  const [showAddItem, setShowAddItem] = useState(false);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
-  const [newItemName, setNewItemName] = useState('');
-  const [bulkItems, setBulkItems] = useState('');
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [selectedMenu, setSelectedMenu] = useState(null);
-  const [selectedItems, setSelectedItems] = useState(new Set());
-  const router = useRouter();
-  
-  // Add polling interval for real-time updates
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [listsResponse, fridgeResponse] = await Promise.all([
-          fetch('http://localhost:5000/api/grocery-lists'),
-          fetch('http://localhost:5000/api/fridge')
-        ]);
-        
-        const [listsData, fridgeData] = await Promise.all([
-          listsResponse.json(),
-          fridgeResponse.json()
-        ]);
-        
-        setLists(listsData.lists || []);
-        setFridgeItems(fridgeData.ingredients || []);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
-    // Initial fetch
-    fetchData();
-
-    // Set up polling interval
-    const interval = setInterval(fetchData, 100000); // Poll every second
-
-    // Cleanup
-    return () => clearInterval(interval);
+    fetch('http://localhost:5000/api/all-recipes')
+      .then(res => res.json())
+      .then(data => {
+        setRecipes(data.recipes || []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error loading recipes:', err);
+        setLoading(false);
+      });
   }, []);
 
-  const getItemColor = (itemName) => {
-    if (!itemName) return 'black';
-    
-    // Clean the name and convert to lowercase for comparison
-    const cleanName = itemName.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim().toLowerCase();
-    
-    // Find matching fridge item
-    const fridgeItem = fridgeItems.find(item => 
-      item.name.toLowerCase() === cleanName
-    );
-  
-    // If we found a fridge item, color based on quantity
-    if (fridgeItem) {
-      return fridgeItem.quantity > 0 ? 'green' : 'red';
-    }
-    
-    // If item is in recipe ingredients but not in fridge, mark as red
-    const isInRecipes = ingredients.includes(cleanName);
-    if (isInRecipes) {
-      return 'red';
-    }
-    
-    // Only return black if item is not recognized at all
-    return 'red';
-  };
-  const formatItemName = (name) => {
-    // Remove existing formatting
-    const cleanName = name.replace(/\[(.*?)\]/, '').replace(/[*•]/, '').trim();
-    const color = getItemColor(cleanName);
-    return `[${color}]• ${cleanName}`;
-  };
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Select Recipe</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        {loading ? (
+          <div className="text-center py-4">Loading recipes...</div>
+        ) : (
+          <div className="space-y-2">
+            {recipes.map((recipe) => (
+              <button
+                key={recipe.id}
+                onClick={() => {
+                  onSelect(recipe);
+                  onClose();
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+              >
+                {recipe.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
-  const handleItemAddManual = async (listId, itemName) => {
-    try {
-      const formattedName = formatItemName(itemName);
+const MenuSelectionModal = ({ listId, onClose, onSelect }) => {
+  const [menus, setMenus] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formattedName }),
+  useEffect(() => {
+    fetch('http://localhost:5000/api/menus')
+      .then(res => res.json())
+      .then(data => {
+        setMenus(data.menus || []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error loading menus:', err);
+        setLoading(false);
       });
+  }, []);
 
-      if (!response.ok) throw new Error('Failed to add item');
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Select Menu</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        {loading ? (
+          <div className="text-center py-4">Loading menus...</div>
+        ) : (
+          <div className="space-y-2">
+            {menus.map((menu) => (
+              <button
+                key={menu.id}
+                onClick={() => {
+                  onSelect(menu.id);
+                  onClose();
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+              >
+                {menu.name} ({menu.recipe_count} recipes)
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
-      // Add to fridge with quantity 0 if not exists
-      const cleanName = itemName.trim();
-      await fetch('http://localhost:5000/api/fridge/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: cleanName,
-          quantity: 0,
-          unit: ''
-        }),
-      });
+// GroceryItem component for displaying and editing individual items
+const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
+  const [localData, setLocalData] = useState({
+    quantity: parseFloat(item.quantity) || 0,
+    unit: item.unit || '',
+    price_per: parseFloat(item.price_per) || 0,
+    total: parseFloat(item.total) || 0
+  });
 
-      setNewItemName('');
-      setShowAddItem(false);
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-
-  const handleItemUpdate = async (listId, itemId, updatedName) => {
+  const handleUpdate = async (field, value) => {
     try {
-      const formattedName = formatItemName(updatedName);
+      const updatedData = { ...localData };
+      updatedData[field] = value;
       
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${itemId}`, {
+      // Calculate total
+      if (field === 'quantity' || field === 'price_per') {
+        updatedData.total = updatedData.quantity * updatedData.price_per;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${item.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formattedName }),
+        body: JSON.stringify(updatedData)
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update item');
+      }
+
+      const responseData = await response.json();
+      setLocalData(responseData.item);
+      onUpdate();
     } catch (error) {
       console.error('Error updating item:', error);
     }
   };
 
-  
+  useEffect(() => {
+    setLocalData({
+      quantity: parseFloat(item.quantity) || 0,
+      unit: item.unit || '',
+      price_per: parseFloat(item.price_per) || 0,
+      total: parseFloat(item.total) || 0
+    });
+  }, [item]);
 
+  return (
+    <tr className="border-b">
+      <td className="py-2 px-4">{item.name}</td>
+      <td className="py-2 px-4">
+        <input
+          type="number"
+          value={localData.quantity}
+          onChange={(e) => {
+            const value = parseFloat(e.target.value) || 0;
+            setLocalData(prev => ({
+              ...prev,
+              quantity: value,
+              total: value * prev.price_per
+            }));
+          }}
+          onBlur={(e) => handleUpdate('quantity', parseFloat(e.target.value) || 0)}
+          className="w-20 p-1 border rounded text-right"
+          min="0"
+          step="1"
+        />
+      </td>
+      <td className="py-2 px-4">
+        <input
+          type="text"
+          value={localData.unit}
+          onChange={(e) => setLocalData(prev => ({ ...prev, unit: e.target.value }))}
+          onBlur={(e) => handleUpdate('unit', e.target.value)}
+          className="w-20 p-1 border rounded"
+        />
+      </td>
+      <td className="py-2 px-4">
+        <input
+          type="number"
+          value={localData.price_per}
+          onChange={(e) => {
+            const value = parseFloat(e.target.value) || 0;
+            setLocalData(prev => ({
+              ...prev,
+              price_per: value,
+              total: prev.quantity * value
+            }));
+          }}
+          onBlur={(e) => handleUpdate('price_per', parseFloat(e.target.value) || 0)}
+          className="w-24 p-1 border rounded text-right"
+          min="0"
+          step="1"
+        />
+      </td>
+      <td className="py-2 px-4 text-right">
+        ${localData.total.toFixed(2)}
+      </td>
+      <td className="py-2 px-4">
+        <button
+           onClick={() => onDelete(item.id)}
+          className="text-red-500 hover:text-red-700"
+        >
+          <X size={20} />
+        </button>
+      </td>
+    </tr>
+  );
+};
+
+export default function GroceryListsPage() {
+  const [lists, setLists] = useState([]);
+  const [expandedList, setExpandedList] = useState(null);
+  const [newList, setNewList] = useState({ name: '', items: [] });
+  const [showForm, setShowForm] = useState(false);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState(false);
+  const [selectedMenu, setSelectedMenu] = useState(false);
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [newItemName, setNewItemName] = useState('');
+  const router = useRouter();
+
+  // Fetch all lists and their items
+  const fetchData = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/grocery-lists');
+      const data = await response.json();
+      setLists(data.lists || []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching lists:', err);
+      setError('Failed to load grocery lists');
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    Promise.all([
-      fetch('http://localhost:5000/api/grocery-lists').then(res => res.json()),
-      fetch('http://localhost:5000/api/fridge').then(res => res.json()),
-      fetch('http://localhost:5000/api/all-recipes').then(res => res.json())
-    ]).then(([listsData, fridgeData, recipesData]) => {
-      setLists(listsData.lists || []);
-      setFridgeItems(fridgeData.ingredients || []);
-      const allIngredients = new Set();
-      recipesData.recipes?.forEach(recipe => {
-        recipe.ingredients.forEach(ing => allIngredients.add(ing.toLowerCase()));
-      });
-      setIngredients(Array.from(allIngredients));
-    });
+    fetchData();
   }, []);
 
-
-
-
-  const cleanText = (text) => {
-    let color = 'text-gray-900';
-    const colorMatch = text.match(/\[(.*?)\]/);
-    if (colorMatch) {
-      const extractedColor = colorMatch[1];
-      switch (extractedColor) {
-        case 'green':
-          color = 'text-green-600';
-          break;
-        case 'red':
-          color = 'text-red-600';
-          break;
-        case 'black':
-          color = 'text-gray-900';
-          break;
-      }
-      text = text.replace(/\[.*?\]/, '');
-    }
-  
-    text = text
-      .replace(/[*_<>]/g, '')
-      .replace(/\{.*?\}/g, '')
-      .replace(/span class=".*?">/g, '')
-      .replace(/<\/span>/g, '')
-      .trim();
-  
-    return { text, color };
-  };
-
-  
-
-
-
-
-  const handleItemAddFromRecipe = async (listId, recipe) => {
-    try {
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: `**${recipe.name}**` 
-        }),
-      });
-
-      for (const ingredient of recipe.ingredients) {
-        const cleanName = ingredient.trim();
-        let colorPrefix = '';
-
-        const inFridge = fridgeItems.some(item => 
-          item.name.toLowerCase() === cleanName.toLowerCase() && 
-          item.quantity > 0
-        );
-        
-        const inRecipes = ingredients.includes(cleanName.toLowerCase());
-        
-        if (inFridge) {
-          colorPrefix = '[green]';
-        } else if (inRecipes) {
-          colorPrefix = '[red]';
-        }
-
-        const formattedName = `${colorPrefix}• ${cleanName}`;
-
-        await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: formattedName }),
-        });
-
-        await fetch('http://localhost:5000/api/fridge/add', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: cleanName,
-            quantity: 0,
-            unit: ''
-          }),
-        });
-      }
-
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists);
-
-    } catch (error) {
-      console.error('Error adding recipe ingredients:', error);
-    }
-  };
-
-  const handleItemAddFromMenu = async (listId, menuId) => {
-    try {
-      const menuResponse = await fetch(`http://localhost:5000/api/menus/${menuId}/recipes`);
-      const menuData = await menuResponse.json();
-
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: `### ${menuData.menu_name} ###`
-        }),
-      });
-
-      for (const recipe of menuData.recipes) {
-        await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            name: `**${recipe.name}**`
-          }),
-        });
-
-        for (const ingredient of recipe.ingredients) {
-          const cleanName = ingredient.trim();
-          let colorPrefix = '';
-
-          const inFridge = fridgeItems.some(item => 
-            item.name.toLowerCase() === cleanName.toLowerCase() && 
-            item.quantity > 0
-          );
-          
-          const inRecipes = ingredients.includes(cleanName.toLowerCase());
-          
-          if (inFridge) {
-            colorPrefix = '[green]';
-          } else if (inRecipes) {
-            colorPrefix = '[red]';
-          }
-
-          const formattedName = `${colorPrefix}• ${cleanName}`;
-
-          await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: formattedName }),
-          });
-
-          await fetch('http://localhost:5000/api/fridge/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: cleanName,
-              quantity: 0,
-              unit: ''
-            }),
-          });
-        }
-      }
-
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists);
-
-    } catch (error) {
-      console.error('Error adding menu items:', error);
-    }
-  };
-
-
-  const RecipeSelectionModal = ({ listId, onClose }) => {
-    const [recipes, setRecipes] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-      fetch('http://localhost:5000/api/all-recipes')
-        .then(res => res.json())
-        .then(data => {
-          setRecipes(data.recipes);
-          setLoading(false);
-        });
-    }, []);
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto relative">
-          {/* Added header section with cancel button */}
-          <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-2 border-b">
-            <h3 className="text-lg font-semibold">Select Recipe</h3>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          
-          {loading ? (
-            <p>Loading recipes...</p>
-          ) : (
-            <div className="space-y-2">
-              {recipes.map((recipe) => (
-                <button
-                  key={recipe.id}
-                  onClick={() => {
-                    handleItemAddFromRecipe(listId, recipe);
-                    onClose();
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
-                >
-                  {recipe.name}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          <div className="mt-4 flex justify-end border-t pt-4">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const MenuSelectionModal = ({ listId, onClose }) => {
-    const [menus, setMenus] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-      fetch('http://localhost:5000/api/menus')
-        .then(res => res.json())
-        .then(data => {
-          setMenus(data.menus);
-          setLoading(false);
-        });
-    }, []);
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg shadow-xl w-96 max-h-[80vh] overflow-y-auto">
-          <h3 className="text-lg font-semibold mb-4">Select Menu</h3>
-          {loading ? (
-            <p>Loading menus...</p>
-          ) : (
-            <div className="space-y-2">
-              {menus.map((menu) => (
-                <button
-                  key={menu.id}
-                  onClick={() => {
-                    handleItemAddFromMenu(listId, menu.id);
-                    onClose();
-                  }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
-                >
-                  {menu.name}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="mt-4 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const toggleList = (listId) => {
-    setExpandedList(expandedList === listId ? null : listId);
-  };
-
-  useEffect(() => {
-    if (expandedList === null) {
-      setSelectedItems(new Set());
-    }
-  }, [expandedList]);
-
-  const addItemField = () => {
-    setNewList({
-      ...newList,
-      items: [...newList.items, '']
-    });
-  };
-
-
-  const updateItem = (index, value) => {
-    const newItems = [...newList.items];
-    newItems[index] = value;
-    setNewList({ ...newList, items: newItems });
-  };
-
-  const handleSubmit = async (e) => {
+  // Handlers for various actions
+  const handleCreateList = async (e) => {
     e.preventDefault();
     try {
-      const cleanedItems = newList.items.map(item => cleanText(item).text).filter(item => item.trim());
       const response = await fetch('http://localhost:5000/api/grocery-lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: cleanText(newList.name).text,
-          items: cleanedItems
+          name: newList.name,
+          items: []
         })
       });
-      if (response.ok) {
-        const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-        const listsData = await listsResponse.json();
-        setLists(listsData.lists);
-        setNewList({ name: '', items: [''] });
-        setShowForm(false);
-      }
-    } catch (error) {
-      console.error('Error:', error);
+
+      if (!response.ok) throw new Error('Failed to create list');
+      
+      await fetchData();
+      setNewList({ name: '', items: [] });
+      setShowForm(false);
+    } catch (err) {
+      setError('Failed to create list');
     }
   };
 
-
-
-
-
-  const handleListUpdate = async (listId, updatedName) => {
-    if (!updatedName) return;
-    try {
-      const cleanedName = cleanText(updatedName).text;
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanedName }),
-      });
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists);
-    } catch (error) {
-      console.error('Error updating list:', error);
-    }
-  };
-
-  const handleListDelete = async (listId) => {
-    if (!confirm('Are you sure you want to delete this list?')) {
+  const handleDeleteList = async (listId) => {
+    if (!listId) {
+      console.error('No list ID provided');
       return;
     }
-    try {
-      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+  
+    if (confirm('Delete this list?')) {
+      try {
+        const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}`, {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+  
+        // Check if response is JSON
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to delete list');
+          }
+        } else if (!response.ok) {
+          throw new Error('Failed to delete list');
+        }
+  
+        // Refresh the lists after successful deletion
+        await fetchData();
+      } catch (err) {
+        console.error('Error deleting list:', err);
+        setError(err.message || 'Failed to delete list');
       }
-
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists || []);
-    } catch (error) {
-      console.error('Error deleting list:', error);
-      alert('Failed to delete list. Please try again.');
     }
   };
 
+  const handleAddItem = async () => {
+    if (!newItemName.trim()) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          name: newItemName,
+          quantity: 0,
+          unit: '',
+          price_per: 0
+        })
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to add item');
+      }
+      
+      setNewItemName('');
+      setShowAddItem(false);
+      await fetchData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Error adding item:', err);
+    }
+  };
+
+  const handleDeleteItem = async (itemId) => {
+    if (!expandedList || !itemId) return;
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+  
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to delete item');
+        }
+      } else if (!response.ok) {
+        throw new Error('Failed to delete item');
+      }
+  
+      // Refresh data after successful deletion
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      setError(error.message || 'Failed to delete item');
+    }
+  };
   
 
-  const handleItemDelete = async (listId, itemIds) => {
-    if (!Array.isArray(itemIds)) {
-      itemIds = [itemIds];
-    }
+  const handleAddFromRecipe = async (recipe) => {
     try {
-      await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/batch-delete`, {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/add-recipe/${recipe.id}`, {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ item_ids: itemIds }),
+          'Accept': 'application/json'
+        }
       });
-      const listsResponse = await fetch('http://localhost:5000/api/grocery-lists');
-      const listsData = await listsResponse.json();
-      setLists(listsData.lists);
-    } catch (error) {
-      console.error('Error deleting items:', error);
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to add recipe items');
+      }
+  
+      setSelectedRecipe(false);
+      await fetchData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Error adding recipe:', err);
+    }
+  };
+  
+  // Update the handleAddFromMenu function
+  const handleAddFromMenu = async (menuId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/add-menu/${menuId}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+  
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to add menu items');
+      }
+  
+      setSelectedMenu(false);
+      await fetchData();
+    } catch (err) {
+      setError(err.message);
+      console.error('Error adding menu:', err);
     }
   };
 
+
+  // Calculate totals for a list
+  const calculateListTotal = (items) => {
+    return items.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const price = parseFloat(item.price_per) || 0;
+      return sum + (quantity * price);
+    }, 0);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <Link 
-            href="/"
-            className="text-blue-600 hover:text-blue-800"
-            onClick={() => {
-              const prevPath = localStorage.getItem('previousPath') || '/';
-              router.push(prevPath);
-            }}
-          >
+          <Link href="/" className="text-blue-600 hover:text-blue-800">
             ← Back
           </Link>
         </div>
@@ -561,38 +462,9 @@ function GroceryListsPage() {
           </button>
         </div>
 
-
-
-
-
-
-
-
-
-
-
-
-        <div className="mb-6 p-4 bg-white rounded-lg shadow-sm">
-          <h2 className="text-lg font-semibold mb-2">Color Index:</h2>
-          <div className="space-y-2">
-            <div className="flex items-center">
-              <span className="text-green-600 font-medium">•</span>
-              <span className="ml-2">Item is in your fridge</span>
-            </div>
-            <div className="flex items-center">
-              <span className="text-red-600 font-medium">•</span>
-              <span className="ml-2">Item is in recipe database but not in fridge</span>
-            </div>
-            <div className="flex items-center">
-              <span className="text-gray-900 font-medium">•</span>
-              <span className="ml-2">Item is not recognized in database</span>
-            </div>
-          </div>
-        </div>
-
         {showForm && (
           <div className="mb-8 bg-white rounded-lg shadow-lg p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleCreateList} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   List Name
@@ -601,36 +473,21 @@ function GroceryListsPage() {
                   type="text"
                   value={newList.name}
                   onChange={(e) => setNewList({ ...newList, name: e.target.value })}
-                  className="w-full rounded-md border border-gray-300 p-2"
+                  className="mt-1 block w-full rounded-md border border-gray-300 p-2"
                   required
                 />
               </div>
-
-              {newList.items.map((item, index) => (
-                <div key={index}>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Item {index + 1}
-                  </label>
-                  <input
-                    type="text"
-                    value={item}
-                    onChange={(e) => updateItem(index, e.target.value)}
-                    className="w-full rounded-md border border-gray-300 p-2"
-                  />
-                </div>
-              ))}
-
-              <div className="flex gap-4">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={addItemField}
-                  className="rounded-md bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >
-                  Add Item
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
                 >
                   Create List
                 </button>
@@ -639,108 +496,89 @@ function GroceryListsPage() {
           </div>
         )}
 
+        {error && (
+          <div className="mb-4 bg-red-100 text-red-700 p-4 rounded-lg">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-4">
           {lists.map((list) => (
             <div key={list.id} className="bg-white rounded-lg shadow-lg">
               <div className="flex items-center justify-between p-4">
                 <button
-                  onClick={() => toggleList(list.id)}
-                  className="flex-1 text-left hover:bg-gray-50"
+                  onClick={() => setExpandedList(expandedList === list.id ? null : list.id)}
+                  className="flex-1 text-left flex items-center justify-between"
                 >
-                  <span className="text-lg font-medium">{cleanText(list.name).text}</span>
+                  <span className="text-lg font-medium">{list.name}</span>
+                  {expandedList === list.id ? 
+                    <ChevronUp className="h-5 w-5" /> : 
+                    <ChevronDown className="h-5 w-5" />
+                  }
                 </button>
+                <div className="flex items-center space-x-2 mr-2">
+                <button
+        onClick={(e) => {
+          e.stopPropagation();
+          fetchData();
+        }}
+        className="p-2 rounded-full hover:bg-gray-200 text-blue-600"
+        title="Refresh list"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" 
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
+        </svg>
+      </button>
+      </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => handleListUpdate(list.id, prompt('Enter new list name:', list.name))}
-                    className="p-1 rounded-full hover:bg-gray-200"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleListDelete(list.id)}
+                    onClick={() => handleDeleteList(list.id)}
                     className="p-1 rounded-full hover:bg-gray-200"
                   >
                     <Trash size={18} />
-                  </button>
-                  <button onClick={() => toggleList(list.id)}>
-                    {expandedList === list.id ? <ChevronUp /> : <ChevronDown />}
                   </button>
                 </div>
               </div>
 
               {expandedList === list.id && (
                 <div className="p-4 border-t border-gray-200">
-                  <ul className="space-y-2">
-                    {list.items.map((item) => {
-                      const { text, color } = cleanText(item.name);
-                      const isRecipeName = !text.includes('•');
-                      const isSelected = selectedItems.has(item.id);
-                      const realTimeColor = isRecipeName ? 'text-gray-900' : `text-${getItemColor(text)}-600`;
-
-                      return (
-                        <li key={item.id} className="flex items-center justify-between group">
-                          <div className="flex items-center gap-2">
-                            {isRecipeName ? (
-                              <span className="font-medium text-gray-900">{text}</span>
-                            ) : (
-                              <span className={color}>{text}</span>
-                            )}
-                          </div>
-                        <div className="flex items-center space-x-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleItemUpdate(list.id, item.id, prompt('Enter new item name:', text))}
-                            className="p-1 rounded-full hover:bg-gray-200"
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (selectedItems.size > 0) {
-                                const newSelected = new Set(selectedItems);
-                                if (isSelected) {
-                                  newSelected.delete(item.id);
-                                } 
-                                else {
-                                  newSelected.add(item.id);
-                                }
-                                setSelectedItems(newSelected);
-                              } 
-                              else {
-                                handleItemDelete(list.id, item.id);
-                              }
-                            }}
-            className="p-1 rounded-full hover:bg-gray-200"
-          >
-            {isSelected ? (
-              <div className="text-green-500">✓</div>
-            ) : (
-              <Trash size={16} />
-            )}
-          </button>
-        </div>
-      </li>
-    );
-  })}
-</ul>
-{selectedItems.size > 0 && (
-  <div className="flex justify-end mt-4">
-    <button
-  onClick={async () => {
-    if (confirm(`Delete ${selectedItems.size} selected items?`)) {
-      await handleItemDelete(list.id, Array.from(selectedItems));
-      setSelectedItems(new Set());
-    }
-  }}
-  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
->
-  Throw Out ({selectedItems.size})
-</button>
-  </div>
-)}
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-4">Item</th>
+                        <th className="text-center py-2 px-4 w-24">Quantity</th>
+                        <th className="text-center py-2 px-4 w-24">Unit</th>
+                        <th className="text-center py-2 px-4 w-24">Price</th>
+                        <th className="text-right py-2 px-4 w-24">Total</th>
+                        <th className="w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.items?.map((item) => (
+                        <GroceryItem
+                          key={item.id}
+                          item={item}
+                          listId={list.id}
+                          onUpdate={fetchData}
+                          onDelete={(itemId) => handleDeleteItem}
+                        />
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="font-bold">
+                        <td colSpan="4" className="py-2 text-right">Total:</td>
+                        <td className="py-2 px-4 text-right">
+                          ${calculateListTotal(list.items || []).toFixed(2)}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
 
                   <div className="mt-4 flex space-x-4">
                     <button
-                      onClick={() => setShowAddItem(!showAddItem)}
+                      onClick={() => setShowAddItem(true)}
                       className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
                     >
                       <Plus size={20} />
@@ -749,74 +587,77 @@ function GroceryListsPage() {
 
                     <button
                       onClick={() => setSelectedRecipe(true)}
-                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                      className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
                     >
                       <Plus size={20} />
-                      Add Item By Recipe
+                      Add Recipe
                     </button>
 
                     <button
                       onClick={() => setSelectedMenu(true)}
-                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                      className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
                     >
                       <Plus size={20} />
-                      Add Item By Menu
+                      Add Menu
                     </button>
                   </div>
-
-                  {showAddItem && (
-                    <div className="mt-2 fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                      <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-                        <h3 className="text-lg font-semibold mb-4">Add Item</h3>
-                        <input
-                          type="text"
-                          value={newItemName}
-                          onChange={(e) => setNewItemName(e.target.value)}
-                          placeholder="Enter item name..."
-                          className="w-full rounded-md border p-2 mb-4"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setNewItemName('');
-                              setShowAddItem(false);
-                            }}
-                            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleItemAddManual(list.id, newItemName)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
-        
+
+        {/* Add Item Modal */}
+        {showAddItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg w-96">
+              <h3 className="text-lg font-semibold mb-4">Add Item</h3>
+              <input
+                type="text"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                className="w-full p-2 border rounded mb-4"
+                placeholder="Enter item name"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setNewItemName('');
+                    setShowAddItem(false);
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddItem}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recipe Selection Modal */}
         {selectedRecipe && (
           <RecipeSelectionModal
             listId={expandedList}
             onClose={() => setSelectedRecipe(false)}
+            onSelect={handleAddFromRecipe}
           />
         )}
 
+        {/* Menu Selection Modal */}
         {selectedMenu && (
           <MenuSelectionModal
             listId={expandedList}
             onClose={() => setSelectedMenu(false)}
+            onSelect={handleAddFromMenu}
           />
         )}
       </div>
     </div>
   );
 }
-
-export default GroceryListsPage;
