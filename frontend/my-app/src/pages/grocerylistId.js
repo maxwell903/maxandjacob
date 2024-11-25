@@ -125,7 +125,7 @@ const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
     const isChecked = item.name.startsWith('✓');
     const toggledName = isChecked ? 
     item.name.substring(2) : // Remove the checkmark
-    'X ' + item.name;       // Add the checkmark
+    'X';       // Add the checkmark
     
     try {
       const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${item.id}`, {
