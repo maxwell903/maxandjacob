@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import text
 from fuzzywuzzy import fuzz
 from sqlalchemy import func
+from receipt_parser import parse_receipt  # Add at top with other imports
 
 
 app = Flask(__name__)
@@ -101,6 +102,193 @@ class GroceryList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class ReceiptParser:
+    # Expanded common unit variations
+    UNITS = {
+        'weight': {
+            'oz': ['oz', 'oz.', 'ounce', 'ounces'],
+            'lb': ['lb', 'lb.', 'lbs', 'lbs.', 'pound', 'pounds'],
+            'g': ['g', 'g.', 'gram', 'grams'],
+            'kg': ['kg', 'kg.', 'kilo', 'kilos', 'kilogram', 'kilograms']
+        },
+        'volume': {
+            'ml': ['ml', 'ml.', 'milliliter', 'milliliters'],
+            'l': ['l', 'l.', 'liter', 'liters'],
+            'gal': ['gal', 'gal.', 'gallon', 'gallons'],
+            'qt': ['qt', 'qt.', 'quart', 'quarts'],
+            'pt': ['pt', 'pt.', 'pint', 'pints'],
+            'fl oz': ['fl oz', 'fl.oz', 'fluid ounce', 'fluid ounces']
+        },
+        'packaging': {
+            'pack': ['pack', 'pk', 'package'],
+            'box': ['box', 'bx', 'boxes'],
+            'bag': ['bag', 'bg', 'bags'],
+            'case': ['case', 'cs', 'cases'],
+            'bunch': ['bunch', 'bn', 'bunches'],
+            'container': ['container', 'cont', 'containers'],
+            'jar': ['jar', 'jr', 'jars'],
+            'can': ['can', 'cn', 'cans']
+        }
+    }
+
+    @classmethod
+    def normalize_unit(cls, unit_text):
+        """Convert various unit formats to standard form"""
+        unit_text = unit_text.lower().strip()
+        for category in cls.UNITS.values():
+            for standard, variations in category.items():
+                if unit_text in variations:
+                    return standard
+        return unit_text
+
+    @classmethod
+    def extract_price(cls, text):
+        """Extract price from text using regex"""
+        import re
+        # Match common price patterns
+        price_patterns = [
+            r'\$\s*(\d+\.?\d*)',  # $12.99
+            r'(\d+\.?\d*)\s*\$',  # 12.99$
+            r'(\d+\.\d{2})',      # Just numbers with cents
+            r'(\d+)'             # Just numbers (assume dollars)
+        ]
+        
+        for pattern in price_patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    continue
+        return None
+
+    @classmethod
+    def extract_quantity(cls, text):
+        """Extract quantity from text"""
+        import re
+        # Match quantity patterns
+        qty_patterns = [
+            r'(\d+\.?\d*)\s*x',   # 2x or 2.5x
+            r'x\s*(\d+\.?\d*)',   # x2 or x2.5
+            r'^(\d+\.?\d*)\s',    # Starting with number
+            r'(\d+\.?\d*)\s*(?:' + '|'.join(sum([var for var in cls.UNITS.values()], [])) + ')'  # Number before unit
+        ]
+        
+        for pattern in qty_patterns:
+            match = re.search(pattern, text.lower())
+            if match:
+                try:
+                    return float(match.group(1))
+                except ValueError:
+                    continue
+        return 1.0  # Default quantity if none found
+
+    @classmethod
+    def parse_receipt_line(cls, line, known_items):
+        """Parse a single line of receipt text"""
+        # Remove special characters except $, ., and basic punctuation
+        clean_line = re.sub(r'[^a-zA-Z0-9\s$.,]', '', line)
+        
+        # Extract item name, quantity, and price
+        item_name_match = re.search(r'(.*?)\s+(\d+\.?\d*)\s*(\$\s*\d+\.?\d*)', clean_line)
+        if item_name_match:
+            item_name = item_name_match.group(1).strip()
+            quantity = float(item_name_match.group(2))
+            price = float(item_name_match.group(3).replace('$', '').strip())
+        else:
+            return None
+        
+        # Try to match with known items
+        best_match = None
+        best_score = 0
+        
+        for known_item in known_items:
+            score = fuzz.ratio(item_name.lower(), known_item.lower())
+            if score > best_score and score > 80:  # 80% threshold for matching
+                best_score = score
+                best_match = known_item
+        
+        # Extract unit
+        found_unit = None
+        for category in cls.UNITS.values():
+            for standard, variations in category.items():
+                if any(var in item_name.lower() for var in variations):
+                    found_unit = standard
+                    break
+            if found_unit:
+                break
+        
+        return {
+            'item_name': best_match if best_match else item_name,
+            'quantity': quantity,
+            'unit': found_unit,
+            'price': price,
+            'matched': bool(best_match),
+            'match_score': best_score if best_match else 0
+        }
+
+    @classmethod
+    def parse_receipt(cls, receipt_text, known_items):
+        """Parse full receipt text and return structured data"""
+        lines = receipt_text.strip().split('\n')
+        parsed_items = []
+        unmatched_items = []
+        
+        for line in lines:
+            if not line.strip():
+                continue
+                
+            result = cls.parse_receipt_line(line, known_items)
+            if result:
+                if result['matched']:
+                    parsed_items.append(result)
+                else:
+                    unmatched_items.append(result)
+        
+        return {
+            'matched_items': parsed_items,
+            'unmatched_items': unmatched_items
+        }
+    
+@app.route('/api/grocery-bill/parse-receipt', methods=['POST'])
+def parse_grocery_receipt():
+    try:
+        data = request.json
+        receipt_text = data.get('receipt_text')
+         
+        if not receipt_text:
+            return jsonify({'error': 'Receipt text is required'}), 400
+         
+         # Get all grocery list items
+        grocery_lists = GroceryList.query.all()
+        all_items = []
+        for grocery_list in grocery_lists:
+            all_items.extend([item.name for item in grocery_list.items])
+         
+         # Parse receipt
+        results = ReceiptParser.parse_receipt(receipt_text, all_items)
+        print("Results from parse_receipt:", results)  # Add this
+         
+         # Group matched items by grocery list
+        grouped_items = {}
+        for item in results['matched_items']:
+            # Find which grocery list(s) contain this item
+            for grocery_list in grocery_lists:
+                for list_item in grocery_list.items:
+                    if fuzz.ratio(item['item_name'].lower(), list_item.name.lower()) > 80:
+                        grouped_items.setdefault(grocery_list.name, [])
+                        grouped_items[grocery_list.name].append(item)
+         
+        return jsonify({
+             'grouped_items': grouped_items,
+             'unmatched_items': results['unmatched_items']
+         })
+         
+    except Exception as e:
+        print(f"Error parsing receipt: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/grocery-lists/<int:list_id>/add-menu/<int:menu_id>', methods=['POST'])
 def add_menu_to_grocery_list(list_id, menu_id):
@@ -529,133 +717,27 @@ def parse_receipt():
         data = request.json
         receipt_text = data['receipt_text']
         
-        # Split text into lines and process each line
-        lines = receipt_text.strip().split('\n')
-        
-        # Clean and normalize each line
-        def clean_line(line):
-            # Remove special characters and numbers, convert to lowercase
-            cleaned = ''.join(char for char in line if char.isalpha() or char.isspace())
-            return ' '.join(cleaned.lower().split())  # Normalize whitespace
-            
-        cleaned_lines = [clean_line(line) for line in lines if clean_line(line)]  # Remove empty lines
-        
-        # Get all unique ingredients from both Ingredient and FridgeItem tables
-        ingredient_query = db.session.query(Ingredient.name).distinct()
-        fridge_query = db.session.query(FridgeItem.name).distinct()
-        all_ingredients = ingredient_query.union(fridge_query).all()
-        ingredient_names = {i[0].lower() for i in all_ingredients}
-        
-        matched_items = set()  # Changed to set since we're only tracking existence
-        unmatched_items = []  # Track unmatched items
-        unmatched_results = []  # Track results of adding unmatched items
-        matched_results = []  # Track results of matched items
-        
-        # Process each line
-        for line in cleaned_lines:
-            if not line:  # Skip empty lines
-                continue
-                
-            matched = False
-            
-            # First try exact match
-            if line in ingredient_names:
-                matched_items.add(line)
-                matched = True
-                continue
-            
-            # Try partial matches for multi-word items
-            best_match = None
-            best_score = 0
-            
-            for db_ingredient in ingredient_names:
-                # Check if ingredient words are contained in the line
-                db_words = set(db_ingredient.split())
-                line_words = set(line.split())
-                
-                # Calculate word overlap ratio
-                common_words = db_words.intersection(line_words)
-                if common_words:
-                    overlap_ratio = len(common_words) / max(len(db_words), len(line_words))
-                    
-                    # Use fuzzy string matching for additional accuracy
-                    fuzzy_ratio = fuzz.ratio(db_ingredient, line) / 100
-                    
-                    # Combined score weighing both word overlap and fuzzy matching
-                    score = (overlap_ratio * 0.7) + (fuzzy_ratio * 0.3)
-                    
-                    if score > best_score and score > 0.6:  # Threshold for matching
-                        best_score = score
-                        best_match = db_ingredient
-            
-            if best_match:
-                matched_items.add(best_match)
-                matched = True
-            
-            # If no match found and reasonable length (prevent junk entries)
-            if not matched and len(line.split()) <= 3:
-                # Format the item name properly (capitalize first letter of each word)
-                formatted_name = ' '.join(word.capitalize() for word in line.split())
-                unmatched_items.append(formatted_name)
-                
-                # Add or update item in FridgeItem
-                existing_item = FridgeItem.query.filter(
-                    func.lower(FridgeItem.name) == func.lower(line)
-                ).first()
-                
-                if existing_item:
-                    existing_item.quantity += 1  # Increment quantity by 1
-                    unmatched_results.append({
-                        'ingredient': formatted_name,
-                        'action': 'updated',
-                        'current_total': existing_item.quantity
-                    })
-                else:
-                    new_item = FridgeItem(
-                        name=formatted_name,
-                        quantity=1,
-                        unit=''
-                    )
-                    db.session.add(new_item)
-                    unmatched_results.append({
-                        'ingredient': formatted_name,
-                        'action': 'added',
-                        'current_total': 1
-                    })
+        matched_items, unmatched_items = parse_receipt(receipt_text)
         
         # Update database with matched items
         for ingredient in matched_items:
-            # Check for existing item (case-insensitive)
-            existing_item = FridgeItem.query.filter(
-                func.lower(FridgeItem.name) == func.lower(ingredient)
-            ).first()
+            fridge_item = FridgeItem.query.filter_by(name=ingredient).first()
             
-            if existing_item:
-                existing_item.quantity += 1  # Increment quantity by 1
-                matched_results.append({
-                    'matched_ingredient': ingredient,
-                    'action': 'updated',
-                    'current_total': existing_item.quantity
-                })
+            if fridge_item:
+                fridge_item.quantity += 1  # Increment quantity by 1
             else:
                 fridge_item = FridgeItem(
                     name=ingredient,
                     quantity=1
                 )
                 db.session.add(fridge_item)
-                matched_results.append({
-                    'matched_ingredient': ingredient,
-                    'action': 'added',
-                    'current_total': 1
-                })
 
         db.session.commit()
         
         return jsonify({
-            'matched_items': matched_results,
+            'matched_items': list(matched_items),
             'unmatched_items': unmatched_items,
-            'unmatched_results': unmatched_results,
-            'total_matches': len(matched_results)
+            'total_matches': len(matched_items)
         })
     except Exception as e:
         db.session.rollback()

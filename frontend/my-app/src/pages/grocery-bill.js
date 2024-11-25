@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { Upload, X, FileText, Clipboard } from 'lucide-react';
 
-// Editable Row Component
+// Keep the existing EditableRow component exactly as is
 const EditableRow = ({ item, onUpdate, isEven }) => {
   const [localData, setLocalData] = useState({
     quantity: item.quantity || 0,
@@ -12,7 +13,6 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
   });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Update total when quantity or price_per changes
   useEffect(() => {
     const total = localData.quantity * localData.price_per;
     setLocalData(prev => ({ ...prev, total }));
@@ -20,9 +20,8 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
 
   const handleUpdate = async (field, value) => {
     try {
-     
       setIsUpdating(true);
-      const updatedData = { ...localData, [field]: value };
+      updatedData = { ...localData, [field]: value };
       
       if (field === 'quantity' || field === 'price_per') {
         updatedData.total = updatedData.quantity * updatedData.price_per;
@@ -37,10 +36,7 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update item');
-      }
-
+      if (!response.ok) throw new Error('Failed to update item');
       setLocalData(updatedData);
       onUpdate(item.id, updatedData);
     } catch (error) {
@@ -51,15 +47,19 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
   };
 
   return (
-    <div className={`grid grid-cols-5 gap-2 p-2 ${isEven ? 'bg-gray-50' : 'bg-white'} items-center`}>
-      <div className="text-sm font-medium">{item.name}</div>
-      <div>
+    <tr className="border-b">
+      <td className="py-2 px-4">{item.name}</td>
+      <td className="py-2 px-4">
         <input
           type="number"
           value={localData.quantity}
           onChange={(e) => {
             const value = parseFloat(e.target.value) || 0;
-            setLocalData(prev => ({ ...prev, quantity: value }));
+            setLocalData(prev => ({
+              ...prev,
+              quantity: value,
+              total: value * prev.price_per
+            }));
           }}
           onBlur={(e) => handleUpdate('quantity', parseFloat(e.target.value) || 0)}
           className="w-20 p-1 border rounded text-right"
@@ -67,57 +67,146 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
           step="1"
           disabled={isUpdating}
         />
-      </div>
-      <div>
+      </td>
+      <td className="py-2 px-4">
         <input
           type="text"
           value={localData.unit}
-          onChange={(e) => {
-            setLocalData(prev => ({ ...prev, unit: e.target.value }));
-          }}
+          onChange={(e) => setLocalData(prev => ({ ...prev, unit: e.target.value }))}
           onBlur={(e) => handleUpdate('unit', e.target.value)}
           className="w-20 p-1 border rounded"
           disabled={isUpdating}
         />
-      </div>
-      <div>
+      </td>
+      <td className="py-2 px-4">
         <input
           type="number"
           value={localData.price_per}
           onChange={(e) => {
             const value = parseFloat(e.target.value) || 0;
-            setLocalData(prev => ({ ...prev, price_per: value }));
+            setLocalData(prev => ({
+              ...prev,
+              price_per: value,
+              total: prev.quantity * value
+            }));
           }}
           onBlur={(e) => handleUpdate('price_per', parseFloat(e.target.value) || 0)}
           className="w-24 p-1 border rounded text-right"
           min="0"
-          step="1"
+          step="0.01"
           disabled={isUpdating}
         />
-      </div>
-      <div className="text-right">
+      </td>
+      <td className="py-2 px-4 text-right">
         ${localData.total.toFixed(2)}
+      </td>
+    </tr>
+  );
+};
+
+// Add Receipt Upload Modal Component
+const ReceiptUploadModal = ({ isOpen, onClose, onUpload }) => {
+  const [receiptText, setReceiptText] = useState('');
+  const [isPasting, setIsPasting] = useState(true);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const text = await file.text();
+      onUpload(text);
+      onClose();
+    }
+  };
+
+  const handlePastedText = () => {
+    if (receiptText.trim()) {
+      onUpload(receiptText);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Upload Receipt</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex space-x-4 mb-4">
+            <button
+              onClick={() => setIsPasting(true)}
+              className={`px-4 py-2 rounded-lg ${
+                isPasting ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Clipboard size={20} />
+                <span>Paste Text</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setIsPasting(false)}
+              className={`px-4 py-2 rounded-lg ${
+                !isPasting ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <FileText size={20} />
+                <span>Upload File</span>
+              </div>
+            </button>
+          </div>
+
+          {isPasting ? (
+            <div className="space-y-4">
+              <textarea
+                value={receiptText}
+                onChange={(e) => setReceiptText(e.target.value)}
+                className="w-full h-64 border rounded-lg p-2"
+                placeholder="Paste your receipt text here..."
+              />
+              <button
+                onClick={handlePastedText}
+                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Process Text
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <input
+                type="file"
+                accept=".txt,.csv"
+                onChange={handleFileUpload}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
+// Modify the main GroceryBill component
 const GroceryBill = () => {
   const [groceryLists, setGroceryLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [matchedItems, setMatchedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [parsedResults, setParsedResults] = useState(null);
 
   useEffect(() => {
     fetchGroceryLists();
   }, []);
-
-  useEffect(() => {
-    if (selectedList) {
-      fetchMatchedItems(selectedList);
-    }
-  }, [selectedList]);
 
   const fetchGroceryLists = async () => {
     try {
@@ -131,69 +220,37 @@ const GroceryBill = () => {
     }
   };
 
-  const fetchMatchedItems = async (listId) => {
+  const handleReceiptUpload = async (receiptText) => {
     try {
-      // First get the grocery list items
-      const listResponse = await fetch(`http://localhost:5000/api/grocery-lists/${listId}`);
-      const listData = await listResponse.json();
+      const response = await fetch('http://localhost:5000/api/grocery-bill/parse-receipt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ receipt_text: receiptText }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to parse receipt');
+      }
+
+      const data = await response.json();
+      setParsedResults(data);
       
-      // Get all fridge items
-      const fridgeResponse = await fetch('http://localhost:5000/api/fridge');
-      const fridgeData = await fridgeResponse.json();
-      
-      // Match items between grocery list and fridge
-      const matched = listData.items
-        .filter(item => {
-          const cleanName = item.name
-            .replace(/\[(red|green)\]•/, '')
-            .replace(/[*•]/, '')
-            .trim()
-            .toLowerCase();
-          
-          if (cleanName.startsWith('###') || cleanName.startsWith('**')) {
-            return false;
-          }
-          
-          return fridgeData.ingredients.some(
-            fridgeItem => fridgeItem.name.toLowerCase() === cleanName
-          );
-        })
-        .map(item => {
-          const cleanName = item.name
-            .replace(/\[(red|green)\]•/, '')
-            .replace(/[*•]/, '')
-            .trim();
-          
-          const fridgeItem = fridgeData.ingredients.find(
-            fi => fi.name.toLowerCase() === cleanName.toLowerCase()
-          );
-          
-          return {
-            ...fridgeItem,
-            total: (fridgeItem.quantity || 0) * (fridgeItem.price_per || 0)
-          };
-        });
-      
-      setMatchedItems(matched);
+      // Update the existing table with the new data
+      if (selectedList) {
+        const listItems = data.grouped_items[selectedList] || [];
+        setMatchedItems(listItems);
+      }
     } catch (error) {
-      setError('Failed to fetch matched items');
+      setError('Failed to process receipt');
+      console.error('Error processing receipt:', error);
     }
   };
 
-  const handleItemUpdate = (itemId, updatedData) => {
-    setMatchedItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, ...updatedData } : item
-    ));
+  const calculateTotal = (items) => {
+    return items.reduce((sum, item) => sum + (item.total || 0), 0);
   };
-
-  const calculateTotal = () => {
-    return matchedItems.reduce((sum, item) => sum + (item.total || 0), 0);
-  };
-
-  // Split items into two columns
-  const midpoint = Math.ceil(matchedItems.length / 2);
-  const leftItems = matchedItems.slice(0, midpoint);
-  const rightItems = matchedItems.slice(midpoint);
 
   if (loading) {
     return (
@@ -214,80 +271,155 @@ const GroceryBill = () => {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Grocery Bill</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Grocery Bill</h1>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              <Upload size={20} />
+              <span>Upload Receipt</span>
+            </button>
+            {parsedResults && (
+              <select
+                onChange={(e) => setSelectedList(e.target.value)}
+                value={selectedList || ""}
+                className="border rounded-lg px-4"
+              >
+                <option value="">Select a List</option>
+                {Object.keys(parsedResults.grouped_items).map(listName => (
+                  <option key={listName} value={listName}>
+                    {listName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+          <div className="mb-8 p-4 bg-red-100 text-red-700 rounded-lg">
             {error}
           </div>
         )}
 
-        <div className="mb-6">
-          <select
-            onChange={(e) => setSelectedList(e.target.value)}
-            value={selectedList || ""}
-            className="w-full md:w-64 p-2 border rounded-lg"
-          >
-            <option value="">Select a Grocery List</option>
-            {groceryLists.map((list) => (
-              <option key={list.id} value={list.id}>
-                {list.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedList && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="grid grid-cols-2 gap-8">
-              {/* Left Column */}
-              <div>
-                <div className="grid grid-cols-5 gap-2 p-2 font-medium bg-gray-100 rounded-t">
-                  <div>Item</div>
-                  <div>Quantity</div>
-                  <div>Unit</div>
-                  <div>Price Per</div>
-                  <div className="text-right">Total</div>
-                </div>
-                <div className="space-y-1">
-                  {leftItems.map((item, idx) => (
-                    <EditableRow
-                      key={item.id}
-                      item={item}
-                      isEven={idx % 2 === 0}
-                      onUpdate={handleItemUpdate}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div>
-                <div className="grid grid-cols-5 gap-2 p-2 font-medium bg-gray-100 rounded-t">
-                  <div>Item</div>
-                  <div>Quantity</div>
-                  <div>Unit</div>
-                  <div>Price Per</div>
-                  <div className="text-right">Total</div>
-                </div>
-                <div className="space-y-1">
-                  {rightItems.map((item, idx) => (
-                    <EditableRow
-                      key={item.id}
-                      item={item}
-                      isEven={idx % 2 === 0}
-                      onUpdate={handleItemUpdate}
-                    />
-                  ))}
-                </div>
-              </div>
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 px-4">Item</th>
+                  <th className="text-center py-2 px-4">Quantity</th>
+                  <th className="text-center py-2 px-4">Unit</th>
+                  <th className="text-center py-2 px-4">Price Per</th>
+                  <th className="text-right py-2 px-4">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedList && parsedResults?.grouped_items[selectedList]?.map((item, index) => (
+                  <EditableRow
+                    key={`${item.item_name}-${index}`}
+                    item={{
+                      id: index,
+                      name: item.item_name,
+                      quantity: item.quantity,
+                      unit: item.unit,
+                      price_per: item.price,
+                      total: item.quantity * item.price
+                    }}
+                    isEven={index % 2 === 0}
+                  />
+                ))}
+             </tbody>
+              <tfoot>
+                  <tr className="font-bold">
+                    <td colSpan="4" className="py-2 px-4 text-right">Total:</td>
+                    <td className="py-2 px-4 text-right">
+                      ${calculateTotal(selectedList && parsedResults?.grouped_items[selectedList] || []).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
+          </div>
 
-            <div className="mt-6 text-right text-xl font-semibold">
-              Total Bill: ${calculateTotal().toFixed(2)}
+        {/* Unmatched Items Section */}
+        {parsedResults?.unmatched_items?.length > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Unmatched Items</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-4">Item</th>
+                    <th className="text-center py-2 px-4">Quantity</th>
+                    <th className="text-center py-2 px-4">Unit</th>
+                    <th className="text-center py-2 px-4">Price Per</th>
+                    <th className="text-right py-2 px-4">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedResults.unmatched_items.map((item, index) => (
+                    <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
+                      <td className="py-2 px-4">{item.item_name}</td>
+                      <td className="py-2 px-4 text-center">{item.quantity}</td>
+                      <td className="py-2 px-4 text-center">{item.unit || '-'}</td>
+                      <td className="py-2 px-4 text-center">${item.price?.toFixed(2) || '0.00'}</td>
+                      <td className="py-2 px-4 text-right">
+                        ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-bold">
+                    <td colSpan="4" className="py-2 px-4 text-right">Total:</td>
+                    <td className="py-2 px-4 text-right">
+                      ${calculateTotal(parsedResults.unmatched_items).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         )}
+
+        {/* Grand Total Section */}
+        {parsedResults && (
+          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Summary</h2>
+            <div className="space-y-2">
+              {Object.entries(parsedResults.grouped_items).map(([listName, items]) => (
+                <div key={listName} className="flex justify-between">
+                  <span>{listName}:</span>
+                  <span>${calculateTotal(items).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between">
+                <span>Unmatched Items:</span>
+                <span>${calculateTotal(parsedResults.unmatched_items).toFixed(2)}</span>
+              </div>
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Grand Total:</span>
+                  <span>
+                    ${(
+                      calculateTotal(Object.values(parsedResults.grouped_items).flat()) +
+                      calculateTotal(parsedResults.unmatched_items)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <ReceiptUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleReceiptUpload}
+        />
       </div>
     </div>
   );
