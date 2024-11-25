@@ -110,6 +110,8 @@ const MenuSelectionModal = ({ listId, onClose, onSelect }) => {
   );
 };
 
+
+
 // GroceryItem component for displaying and editing individual items
 const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
   const [localData, setLocalData] = useState({
@@ -118,6 +120,36 @@ const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
     price_per: parseFloat(item.price_per) || 0,
     total: parseFloat(item.total) || 0
   });
+
+  const handleDelete = async () => {
+    const isChecked = item.name.startsWith('✓');
+    const toggledName = isChecked ? 
+    item.name.substring(2) : // Remove the checkmark
+    'X ' + item.name;       // Add the checkmark
+    
+    try {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${listId}/items/${item.id}`, {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete item');
+      }
+
+      // Only call onDelete if the deletion was successful
+      if (typeof onDelete === 'function') {
+        onDelete(item.id);
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('Failed to delete item. Please try again.');
+    }
+  };
 
   const handleUpdate = async (field, value) => {
     try {
@@ -156,6 +188,8 @@ const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
       total: parseFloat(item.total) || 0
     });
   }, [item]);
+
+  
 
   return (
     <tr className="border-b">
@@ -210,10 +244,10 @@ const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
       </td>
       <td className="py-2 px-4">
         <button
-           onClick={() => onDelete(item.id)}
+          onClick={handleDelete}
           className="text-red-500 hover:text-red-700"
         >
-          <X size={20} />
+         {item.name.startsWith('✓') ? <X size={20} /> : <Check size={20} />}
         </button>
       </td>
     </tr>
