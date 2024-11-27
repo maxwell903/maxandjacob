@@ -1180,7 +1180,7 @@ def import_to_fridge():
             ).first()
              
             if existing_item:
-                existing_item.quantity = float(item['quantity'])
+                existing_item.quantity = existing_item.quantity + float(item['quantity'])
                 existing_item.unit = item.get('unit', '')
                 existing_item.price_per = float(item['price']) if 'price' in item else 0
             else:

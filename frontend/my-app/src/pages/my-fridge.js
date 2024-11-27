@@ -176,7 +176,11 @@ export default function InventoryView() {
        
        return selectedGroceryListItems.items.reduce((acc, groceryItem) => {
         const cleanName = groceryItem.name.replace(/\[.*?\]/, '').replace(/[*•]/, '').trim().toLowerCase();
-        
+        const existsInFridge = fridgeItems.some(item => 
+          item.name.toLowerCase() === cleanName
+       
+        );
+       
         const matchesNeeded = neededItems.some(item => 
           item.name.toLowerCase() === cleanName
         );
@@ -184,8 +188,8 @@ export default function InventoryView() {
           item.name.toLowerCase() === cleanName
         );
          
-         if (inventoryFilter === 'needed' || inventoryFilter == 'inStock') {
-           if (matchesNeeded) {
+        if (inventoryFilter === 'needed' || inventoryFilter === 'inStock') {
+                    if (matchesNeeded || !existsInFridge) {
              acc.matchingNeeded.push(groceryItem);
            } else if (matchesInStock) {
              acc.matchingInStock.push(groceryItem);
@@ -204,13 +208,27 @@ export default function InventoryView() {
       case 'inStock':
         return fridgeItems.filter(item => item.quantity > 0);
       case 'needed':
-        return fridgeItems.filter(item => item.quantity === 0);
+        let neededItems = fridgeItems.filter(item => item.quantity === 0);
+        
+        if (selectedGroceryList) {
+          const selectedList = groceryLists.find(list => list.id === selectedGroceryList);
+          if (selectedList && selectedList.items) {
+            // Filter needed items to only show those that match items in the selected grocery list
+            neededItems = neededItems.filter(fridgeItem => 
+              selectedList.items.some(groceryItem => {
+                const cleanGroceryName = groceryItem.name.replace(/[•✓\[\]]/g, '').trim();
+                return fridgeItem.name.toLowerCase() === cleanGroceryName.toLowerCase();
+              })
+            );
+          }
+        }
+        return neededItems;
       case 'all':
         return fridgeItems;
       default:
         return fridgeItems;
     }
-  }, [fridgeItems, inventoryFilter]);
+  }, [fridgeItems, inventoryFilter, selectedGroceryList, groceryLists]);
 
   // Initial data fetch
   useEffect(() => {
@@ -500,11 +518,18 @@ export default function InventoryView() {
               <span className="text-sm text-gray-600">Filter by Grocery List:</span>
               <select
                 value={selectedGroceryList || ''}
-                onChange={(e) => setSelectedGroceryList(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => {
+                  const listId = e.target.value ? Number(e.target.value) : null;
+                  setSelectedGroceryList(listId);
+                }}
                 className="border rounded px-2 py-1"
               >
                 <option value="">All Items</option>
-                {/* Add your grocery list options here */}
+                {groceryLists.map(list => (
+                  <option key={list.id} value={list.id}>
+                    {list.name}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -595,7 +620,7 @@ export default function InventoryView() {
       {(() => {
         const { matchingInStock, matchingNeeded, other } = getFilteredGroceryListItems();
         
-        const renderItem = (item, idx) => {
+        const renderItem = (item, idx, fridgeItems, matchingInStock) => {
           const name = item.name.replace(/\[(red|green)\]•/, '•');
           if (name.startsWith('###')) {
             return (
@@ -611,8 +636,22 @@ export default function InventoryView() {
             );
           } else {
             const isInStock = matchingInStock.includes(item);
+            const cleanName = item.name.replace(/\[(red|green)\]•/, '').replace(/[*•]/, '').trim().toLowerCase();
+            const existsInFridge = fridgeItems.some(fridgeItem => 
+              fridgeItem.name.toLowerCase() === cleanName
+            );
+             // Determine text color based on item status
+            let textColor;
+            if (isInStock) {
+              textColor = 'text-green-600';  // Item is in stock
+            } else if (!existsInFridge) {
+              textColor = 'text-red-600';    // Item doesn't exist in fridge
+            } else {
+              textColor = 'text-red-600';   // Item exists but needs restocking
+            }
+            
             return (
-              <div key={idx} className={`text-sm ${isInStock ? 'text-green-600' : 'text-red-600'} py-1`}>
+              <div key={idx} className={`text-sm ${textColor} py-1`}>
                 {name}
               </div>
             );
@@ -627,13 +666,13 @@ export default function InventoryView() {
                 {matchingNeeded.length > 0 && (
                   <div className="mb-2">
                     <div className="text-xs font-medium text-gray-500 mb-1">Needed Items:</div>
-                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`))}
+                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`, fridgeItems, matchingInStock))}
                   </div>
                 )}
                 {matchingInStock.length > 0 && (
                   <div className="mb-2">
                     <div className="text-xs font-medium text-gray-500 mb-1">In Stock Items:</div>
-                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`))}
+                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`, fridgeItems, matchingInStock))}
                   </div>
                 )}
               </>
@@ -643,20 +682,20 @@ export default function InventoryView() {
                 {matchingInStock.length > 0 && (
                   <div className="mb-2">
                     <div className="text-xs font-medium text-gray-500 mb-1">In Stock Items:</div>
-                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`))}
+                    {matchingInStock.map((item, idx) => renderItem(item, `instock-${idx}`, fridgeItems, matchingInStock))}
                   </div>
                 )}
                 {matchingNeeded.length > 0 && (
                   <div className="mb-2">
                     <div className="text-xs font-medium text-gray-500 mb-1">Needed Items:</div>
-                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`))}
+                    {matchingNeeded.map((item, idx) => renderItem(item, `needed-${idx}`, fridgeItems, matchingInStock))}
                   </div>
                 )}
               </>
             ) : (
               // All items view
               <div>
-                {other.map((item, idx) => renderItem(item, `other-${idx}`))}
+                {other.map((item, idx) => renderItem(item, `other-${idx}`, fridgeItems, matchingInStock))}
               </div>
             )}
           </>
