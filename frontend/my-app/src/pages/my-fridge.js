@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ChevronDown, ChevronUp, Edit, Plus, Trash, X, Check, PlusCircle } from 'lucide-react';
 
 // Helper component for inventory rows
-const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists }) => {
+const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists, showDifference, difference }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [localQuantity, setLocalQuantity] = useState(item.quantity);
   const [localUnit, setLocalUnit] = useState(item.unit || '');
@@ -89,6 +89,7 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists }) => {
           className={`w-16 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
           disabled={isUpdating}
           min="0"
+          
         />
       </div>
       <div>
@@ -543,9 +544,25 @@ export default function InventoryView() {
             /* Inventory Grid */
             <div className="flex gap-8">
               {/* Main Tables Container */}
-              <div className="flex-grow grid grid-cols-2 gap-4">
-              {/* Left Column */}
-              <div className="space-y-2">
+              <div className="flex-grow grid grid-cols-2 gap-1">
+   {/* Column Headers */}
+   <div className="col-span-2 grid grid-cols-2 gap-8 mb-4">
+     {/* Left Column Headers */}
+     <div className="grid grid-cols-3 gap-4 px-4 font-semibold text-gray-700">
+       <div className="w-48">Item</div>
+       <div className="w-48">Quantity</div>
+       <div>Unit</div>
+     </div>
+     {/* Right Column Headers */}
+     <div className="grid grid-cols-3 gap-4 px-4 font-semibold text-gray-700">
+       <div className="w-48">Item</div>
+       <div className="w-48">Quantity</div>
+       <div>Unit</div>
+     </div>
+   </div>
+   
+   {/* Left Column Content */}
+   <div className="space-y-1 pr-4">
                 {getFilteredInventory
                   .slice(0, Math.ceil(getFilteredInventory.length / 2))
                   .map((item, index) => (
@@ -557,10 +574,9 @@ export default function InventoryView() {
                  
                     />
                   ))}
-              </div>
-
-              {/* Right Column */}
-              <div className="space-y-2">
+                 </div>
+                    {/* Right Column Content */}
+                <div className="space-y-1 pl- 4">
                 {getFilteredInventory
                   .slice(Math.ceil(getFilteredInventory.length / 2))
                   .map((item, index) => (
