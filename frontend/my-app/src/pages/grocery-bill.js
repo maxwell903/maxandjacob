@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Upload, X, FileText, Clipboard } from 'lucide-react';
+import { Upload, X, FileText, Clipboard, ChevronDown } from 'lucide-react';
 
 // Keep the existing EditableRow component exactly as is
 const EditableRow = ({ item, onUpdate, isEven }) => {
@@ -21,19 +21,16 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
   const handleUpdate = async (field, value) => {
     try {
       setIsUpdating(true);
-      updatedData = { ...localData, [field]: value };
+      const updatedData = { ...localData, [field]: value };
       
       if (field === 'quantity' || field === 'price_per') {
         updatedData.total = updatedData.quantity * updatedData.price_per;
       }
 
-      const response = await fetch(`http://localhost:5000/api/fridge/${item.id}`, {
+      const response = await fetch(`http://localhost:5000/api/grocery-lists/${item.list_id}/items/${item.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...item,
-          ...updatedData
-        })
+        body: JSON.stringify(updatedData)
       });
 
       if (!response.ok) throw new Error('Failed to update item');
@@ -47,7 +44,7 @@ const EditableRow = ({ item, onUpdate, isEven }) => {
   };
 
   return (
-    <tr className="border-b">
+    <tr className={`border-b ${isEven ? 'bg-gray-50' : ''}`}>
       <td className="py-2 px-4">{item.name}</td>
       <td className="py-2 px-4">
         <input
@@ -199,10 +196,12 @@ const GroceryBill = () => {
   const [groceryLists, setGroceryLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [matchedItems, setMatchedItems] = useState([]);
+  const [unMatchedItems, setUnMatchedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [parsedResults, setParsedResults] = useState(null);
+  const [showImportMenu, setShowImportMenu] = useState(false);
 
   useEffect(() => {
     fetchGroceryLists();
@@ -236,16 +235,58 @@ const GroceryBill = () => {
 
       const data = await response.json();
       setParsedResults(data);
-      
-      // Update the existing table with the new data
+      console.log("Parsed results:", data); // For debugging
+
+      // If a list is selected, update the matched items for that list
       if (selectedList) {
-        const listItems = data.grouped_items[selectedList] || [];
-        setMatchedItems(listItems);
+        const selectedListName = groceryLists.find(list => list.id === selectedList)?.name;
+        if (selectedListName && data.grouped_items[selectedListName]) {
+          setMatchedItems(data.grouped_items[selectedListName]);
+        } else {
+          setMatchedItems([]);
+        }
+      } else {
+        setMatchedItems([]);
       }
+
+      setUnMatchedItems(data.unmatched_items || []);
     } catch (error) {
       setError('Failed to process receipt');
       console.error('Error processing receipt:', error);
     }
+};
+
+  const handleListSelect = (listId) => {
+    setSelectedList(listId);
+    if (parsedResults && listId) {
+      const selectedListName = groceryLists.find(list => list.id === listId)?.name;
+      if (selectedListName && parsedResults.grouped_items[selectedListName]) {
+        setMatchedItems(parsedResults.grouped_items[selectedListName]);
+      } else {
+        setMatchedItems([]);
+      }
+    } else {
+      setMatchedItems([]);
+    }
+  };
+
+  const handleItemUpdate = (itemId, updatedData) => {
+    setMatchedItems(prevItems =>
+      prevItems.map(item =>
+        item.id === itemId ? { ...item, ...updatedData } : item
+      )
+    );
+  };
+
+  const updateItemLists = (listId, groupedItems, unMatchedItems) => {
+    if (listId && groupedItems) {
+      const listItems = groupedItems[listId] || [];
+      setMatchedItems(listItems);
+    } else {
+      setMatchedItems([]);
+    }
+
+    setUnMatchedItems(unMatchedItems || []);
   };
 
   const calculateTotal = (items) => {
@@ -281,20 +322,18 @@ const GroceryBill = () => {
               <Upload size={20} />
               <span>Upload Receipt</span>
             </button>
-            {parsedResults && (
-              <select
-                onChange={(e) => setSelectedList(e.target.value)}
-                value={selectedList || ""}
-                className="border rounded-lg px-4"
-              >
-                <option value="">Select a List</option>
-                {Object.keys(parsedResults.grouped_items).map(listName => (
-                  <option key={listName} value={listName}>
-                    {listName}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              onChange={(e) => handleListSelect(e.target.value)}
+              value={selectedList || ''}
+              className="border rounded-lg px-4"
+            >
+              <option value="">Select a List</option>
+              {groceryLists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -317,7 +356,7 @@ const GroceryBill = () => {
                 </tr>
               </thead>
               <tbody>
-                {selectedList && parsedResults?.grouped_items[selectedList]?.map((item, index) => (
+                {matchedItems.map((item, index) => (
                   <EditableRow
                     key={`${item.item_name}-${index}`}
                     item={{
@@ -326,28 +365,95 @@ const GroceryBill = () => {
                       quantity: item.quantity,
                       unit: item.unit,
                       price_per: item.price,
-                      total: item.quantity * item.price
+                      total: item.quantity * item.price,
+                      list_id: selectedList,
                     }}
+                    onUpdate={handleItemUpdate}
                     isEven={index % 2 === 0}
                   />
                 ))}
-             </tbody>
+              </tbody>
               <tfoot>
-                  <tr className="font-bold">
-                    <td colSpan="4" className="py-2 px-4 text-right">Total:</td>
-                    <td className="py-2 px-4 text-right">
-                      ${calculateTotal(selectedList && parsedResults?.grouped_items[selectedList] || []).toFixed(2)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                <tr className="font-bold">
+                  <td colSpan="4" className="py-2 px-4 text-right">
+                    Total:
+                  </td>
+                  <td className="py-2 px-4 text-right">
+                    ${calculateTotal(matchedItems).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
+        </div>
 
-        {/* Unmatched Items Section */}
-        {parsedResults?.unmatched_items?.length > 0 && (
-          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Unmatched Items</h2>
+        {unMatchedItems.length > 0 && (
+   <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+     <div className="flex justify-between items-center mb-4">
+       <h2 className="text-xl font-semibold">Unmatched Items</h2>
+       <div className="relative">
+         <button
+           onClick={() => setShowImportMenu(!showImportMenu)}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+         >
+           Import <ChevronDown className="h-4 w-4 ml-2" />
+         </button>
+         {showImportMenu && (
+           <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+             <div className="py-1">
+               <button
+                 onClick={async () => {
+                   try {
+                     const response = await fetch('http://localhost:5000/api/import-to-fridge', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ items: unMatchedItems })
+                     });
+                     if (response.ok) {
+                       alert('Items imported to fridge successfully');
+                       setShowImportMenu(false);
+                     }
+                   } catch (error) {
+                     console.error('Error importing to fridge:', error);
+                     alert('Failed to import items to fridge');
+                   }
+                 }}
+                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+               >
+                 Import to My Fridge
+               </button>
+               <button
+                 onClick={async () => {
+                   const listName = prompt('Enter name for new grocery list:');
+                   if (!listName) return;
+                   
+                   try {
+                     const response = await fetch('http://localhost:5000/api/import-to-grocery-list', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({
+                         name: listName,
+                         items: unMatchedItems
+                       })
+                     });
+                     if (response.ok) {
+                       alert('Grocery list created successfully');
+                       setShowImportMenu(false);
+                     }
+                   } catch (error) {
+                     console.error('Error creating grocery list:', error);
+                     alert('Failed to create grocery list');
+                   }
+                 }}
+                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+               >
+                 Import to Grocery List
+               </button>
+             </div>
+           </div>
+         )}
+       </div>
+     </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -360,23 +466,37 @@ const GroceryBill = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {parsedResults.unmatched_items.map((item, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
+                  {unMatchedItems.map((item, index) => (
+                    <tr
+                      key={index}
+                      className={index % 2 === 0 ? 'bg-gray-50' : ''}
+                    >
                       <td className="py-2 px-4">{item.item_name}</td>
-                      <td className="py-2 px-4 text-center">{item.quantity}</td>
-                      <td className="py-2 px-4 text-center">{item.unit || '-'}</td>
-                      <td className="py-2 px-4 text-center">${item.price?.toFixed(2) || '0.00'}</td>
+                      <td className="py-2 px-4 text-center">
+                        {item.quantity}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        {item.unit || '-'}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        ${item.price?.toFixed(2) || '0.00'}
+                      </td>
                       <td className="py-2 px-4 text-right">
-                        ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                        $
+                        {((item.price || 0) * (item.quantity || 0)).toFixed(
+                          2
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="font-bold">
-                    <td colSpan="4" className="py-2 px-4 text-right">Total:</td>
+                    <td colSpan="4" className="py-2 px-4 text-right">
+                      Total:
+                    </td>
                     <td className="py-2 px-4 text-right">
-                      ${calculateTotal(parsedResults.unmatched_items).toFixed(2)}
+                      ${calculateTotal(unMatchedItems).toFixed(2)}
                     </td>
                   </tr>
                 </tfoot>
@@ -385,27 +505,35 @@ const GroceryBill = () => {
           </div>
         )}
 
-        {/* Grand Total Section */}
         {parsedResults && (
           <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Summary</h2>
             <div className="space-y-2">
-              {Object.entries(parsedResults.grouped_items).map(([listName, items]) => (
-                <div key={listName} className="flex justify-between">
-                  <span>{listName}:</span>
-                  <span>${calculateTotal(items).toFixed(2)}</span>
-                </div>
-              ))}
+              {Object.entries(parsedResults.grouped_items).map(
+                ([listName, items]) => (
+                  <div key={listName} className="flex justify-between">
+                    <span>{listName}:</span>
+                    <span>
+                      ${calculateTotal(items).toFixed(2)}
+                    </span>
+                  </div>
+                )
+              )}
               <div className="flex justify-between">
                 <span>Unmatched Items:</span>
-                <span>${calculateTotal(parsedResults.unmatched_items).toFixed(2)}</span>
+                <span>
+                  ${calculateTotal(parsedResults.unmatched_items).toFixed(2)}
+                </span>
               </div>
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between font-bold text-lg">
                   <span>Grand Total:</span>
                   <span>
-                    ${(
-                      calculateTotal(Object.values(parsedResults.grouped_items).flat()) +
+                    $
+                    {(
+                      calculateTotal(
+                        Object.values(parsedResults.grouped_items).flat()
+                      ) +
                       calculateTotal(parsedResults.unmatched_items)
                     ).toFixed(2)}
                   </span>

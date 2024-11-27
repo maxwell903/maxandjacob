@@ -196,6 +196,7 @@ class ReceiptParser:
             item_name = item_name_match.group(1).strip()
             quantity = float(item_name_match.group(2))
             price = float(item_name_match.group(3).replace('$', '').strip())
+            total = quantity * price
         else:
             return None
         
@@ -224,6 +225,7 @@ class ReceiptParser:
             'quantity': quantity,
             'unit': found_unit,
             'price': price,
+            'total': total,
             'matched': bool(best_match),
             'match_score': best_score if best_match else 0
         }
@@ -234,6 +236,7 @@ class ReceiptParser:
         lines = receipt_text.strip().split('\n')
         parsed_items = []
         unmatched_items = []
+        subtotal = 0
         
         for line in lines:
             if not line.strip():
@@ -243,51 +246,74 @@ class ReceiptParser:
             if result:
                 if result['matched']:
                     parsed_items.append(result)
+                    subtotal += result['total']
                 else:
                     unmatched_items.append(result)
         
         return {
             'matched_items': parsed_items,
-            'unmatched_items': unmatched_items
+            'unmatched_items': unmatched_items,
+            'subtotal': subtotal
         }
     
 @app.route('/api/grocery-bill/parse-receipt', methods=['POST'])
 def parse_grocery_receipt():
-    try:
-        data = request.json
-        receipt_text = data.get('receipt_text')
-         
-        if not receipt_text:
-            return jsonify({'error': 'Receipt text is required'}), 400
-         
-         # Get all grocery list items
-        grocery_lists = GroceryList.query.all()
-        all_items = []
-        for grocery_list in grocery_lists:
-            all_items.extend([item.name for item in grocery_list.items])
-         
-         # Parse receipt
-        results = ReceiptParser.parse_receipt(receipt_text, all_items)
-        print("Results from parse_receipt:", results)  # Add this
-         
-         # Group matched items by grocery list
-        grouped_items = {}
-        for item in results['matched_items']:
-            # Find which grocery list(s) contain this item
-            for grocery_list in grocery_lists:
-                for list_item in grocery_list.items:
-                    if fuzz.ratio(item['item_name'].lower(), list_item.name.lower()) > 80:
-                        grouped_items.setdefault(grocery_list.name, [])
-                        grouped_items[grocery_list.name].append(item)
-         
-        return jsonify({
-             'grouped_items': grouped_items,
-             'unmatched_items': results['unmatched_items']
-         })
-         
-    except Exception as e:
-        print(f"Error parsing receipt: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+   try:
+       data = request.json
+       receipt_text = data.get('receipt_text')
+        
+       if not receipt_text:
+           return jsonify({'error': 'Receipt text is required'}), 400
+        
+       # Get all grocery lists and their items
+       grocery_lists = GroceryList.query.all()
+       lists_items = {}
+       for grocery_list in grocery_lists:
+           # Remove special characters from item names
+           clean_items = [re.sub(r'[^a-zA-Z0-9\s]', '', item.name.lower())
+                         for item in grocery_list.items]
+           lists_items[grocery_list.name] = clean_items
+        
+       # Parse receipt lines
+       lines = receipt_text.strip().split('\n')
+       grouped_items = {list_name: [] for list_name in lists_items.keys()}
+       unmatched_items = []
+        
+       for line in lines:
+           parsed_item = ReceiptParser.parse_receipt_line(line, [])
+           if not parsed_item:
+               continue
+
+           # Clean the parsed item name
+           clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', parsed_item['item_name'].lower())
+           
+           # Try to match with items in grocery lists
+           best_match = None
+           best_score = 0
+           matched_list = None
+
+           for list_name, items in lists_items.items():
+               for item in items:
+                   score = fuzz.token_set_ratio(clean_name, item)
+                   if score > best_score and score > 85:  # Increased threshold for better accuracy
+                       best_score = score
+                       best_match = item
+                       matched_list = list_name
+
+           if matched_list:
+               parsed_item['original_name'] = best_match
+               grouped_items[matched_list].append(parsed_item)
+           else:
+               unmatched_items.append(parsed_item)
+        
+       return jsonify({
+           'grouped_items': grouped_items,
+           'unmatched_items': unmatched_items
+       })
+        
+   except Exception as e:
+       print(f"Error parsing receipt: {str(e)}")
+       return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/grocery-lists/<int:list_id>/add-menu/<int:menu_id>', methods=['POST'])
@@ -1139,6 +1165,70 @@ def add_item_to_list(list_id):
     except Exception as e:
         db.session.rollback()
         print(f"Error adding item to list: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/import-to-fridge', methods=['POST'])
+def import_to_fridge():
+    try:
+        data = request.json
+        items = data.get('items', [])
+         
+        for item in items:
+             # Check if item already exists
+            existing_item = FridgeItem.query.filter(
+                func.lower(FridgeItem.name) == func.lower(item['item_name'])
+            ).first()
+             
+            if existing_item:
+                existing_item.quantity = float(item['quantity'])
+                existing_item.unit = item.get('unit', '')
+                existing_item.price_per = float(item['price']) if 'price' in item else 0
+            else:
+                new_item = FridgeItem(
+                    name=item['item_name'],
+                    quantity=float(item['quantity']),
+                    unit=item.get('unit', ''),
+                    price_per=float(item['price']) if 'price' in item else 0
+                )
+                db.session.add(new_item)
+         
+        db.session.commit()
+        return jsonify({'message': 'Items imported successfully'}), 200
+         
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+ 
+@app.route('/api/import-to-grocery-list', methods=['POST'])
+def import_to_grocery_list():
+    try:
+        data = request.json
+        name = data.get('name')
+        items = data.get('items', [])
+         
+        if not name:
+            return jsonify({'error': 'List name is required'}), 400
+             
+        new_list = GroceryList(name=name)
+        db.session.add(new_list)
+        db.session.flush()
+         
+        for item in items:
+            grocery_item = GroceryItem(
+                name=item['item_name'],
+                list_id=new_list.id,
+                quantity=float(item['quantity']),
+                unit=item.get('unit', ''),
+                price_per=float(item['price']) if 'price' in item else 0,
+                total=float(item['quantity']) * float(item['price']) if 'price' in item else 0
+            )
+            db.session.add(grocery_item)
+             
+        db.session.commit()
+        return jsonify({'message': 'Grocery list created successfully', 'id': new_list.id}), 201
+         
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
      
