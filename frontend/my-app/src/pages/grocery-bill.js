@@ -235,19 +235,8 @@ const GroceryBill = () => {
 
       const data = await response.json();
       setParsedResults(data);
-      console.log("Parsed results:", data); // For debugging
-
-      // If a list is selected, update the matched items for that list
-      if (selectedList) {
-        const selectedListName = groceryLists.find(list => list.id === selectedList)?.name;
-        if (selectedListName && data.grouped_items[selectedListName]) {
-          setMatchedItems(data.grouped_items[selectedListName]);
-        } else {
-          setMatchedItems([]);
-        }
-      } else {
-        setMatchedItems([]);
-      }
+      const allMatchedItems = Object.values(data.grouped_items || {}).flat();
+      setMatchedItems(allMatchedItems);
 
       setUnMatchedItems(data.unmatched_items || []);
     } catch (error) {
@@ -256,19 +245,13 @@ const GroceryBill = () => {
     }
 };
 
-  const handleListSelect = (listId) => {
-    setSelectedList(listId);
-    if (parsedResults && listId) {
-      const selectedListName = groceryLists.find(list => list.id === listId)?.name;
-      if (selectedListName && parsedResults.grouped_items[selectedListName]) {
-        setMatchedItems(parsedResults.grouped_items[selectedListName]);
-      } else {
-        setMatchedItems([]);
+const handleListSelect = (listId) => {
+  setSelectedList(listId);
+  if (parsedResults) {
+        const allMatchedItems = Object.values(parsedResults.grouped_items || {}).flat();
+        setMatchedItems(allMatchedItems);
       }
-    } else {
-      setMatchedItems([]);
-    }
-  };
+};
 
   const handleItemUpdate = (itemId, updatedData) => {
     setMatchedItems(prevItems =>
@@ -386,6 +369,122 @@ const GroceryBill = () => {
             </table>
           </div>
         </div>
+
+       {matchedItems.length > 0 && (
+         console.log("Rendering matched items:", matchedItems), // Add this debug log
+          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Matched Items</h2>
+              <div className="relative">
+                <button
+                  onClick={() => setShowImportMenu(!showImportMenu)}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Import <ChevronDown className="h-4 w-4 ml-2" />
+                </button>
+                {showImportMenu && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                    <div className="py-1">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch('http://localhost:5000/api/import-to-fridge', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ items: matchedItems })
+                            });
+                            if (response.ok) {
+                              alert('Items imported to fridge successfully');
+                              setShowImportMenu(false);
+                            }
+                          } catch (error) {
+                            console.error('Error importing to fridge:', error);
+                            alert('Failed to import items to fridge');
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Import to My Fridge
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const listName = prompt('Enter name for new grocery list:');
+                          if (!listName) return;
+                          
+                          try {
+                            const response = await fetch('http://localhost:5000/api/import-to-grocery-list', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                name: listName,
+                                items: matchedItems
+                              })
+                            });
+                            if (response.ok) {
+                              alert('Grocery list created successfully');
+                              setShowImportMenu(false);
+                            }
+                          } catch (error) {
+                            console.error('Error creating grocery list:', error);
+                            alert('Failed to create grocery list');
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Import to Grocery List
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              {/* Table content here - Same structure as unmatched items */}
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-4">Item</th>
+                    <th className="text-center py-2 px-4">Quantity</th>
+                    <th className="text-center py-2 px-4">Unit</th>
+                    <th className="text-center py-2 px-4">Price Per</th>
+                    <th className="text-right py-2 px-4">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchedItems.map((item, index) => (
+                    <tr
+                      key={index}
+                      className={index % 2 === 0 ? 'bg-gray-50' : ''}
+                    >
+                      <td className="py-2 px-4">{item.item_name}</td>
+                      <td className="py-2 px-4 text-center">
+                        {item.quantity}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        {item.unit || '-'}
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        ${item.price?.toFixed(2) || '0.00'}
+                      </td>
+                      <td className="py-2 px-4 text-right">
+                        ${((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-bold">
+                    <td colSpan="4" className="py-2 px-4 text-right">Total:</td>
+                    <td className="py-2 px-4 text-right">
+                      ${calculateTotal(matchedItems).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
 
         {unMatchedItems.length > 0 && (
    <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
