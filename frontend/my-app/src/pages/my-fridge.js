@@ -60,9 +60,9 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists, showDif
 
 
   return (
-    <div className={`grid grid-cols-3 gap-4 p-4 border-b ${isEven ? 'bg-gray-50' : 'bg-white'}`}>
+    <div className={`grid grid-cols-3 p-4 border-b ${isEven ? 'bg-gray-50' : 'bg-white'}`}>
         
-        <div className="w-48 flex items-center gap-2">
+        <div className="w-36 flex items-start gap-2 pr-2">
         <button
           onClick={handleDelete}
           className="text-red-500 hover:text-red-700 transition-colors"
@@ -72,9 +72,9 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists, showDif
         </button>
 
 
-            <span className="text-sm">{item.name}</span>
+        <span className="text-sm break-words">{item.name}</span>
           </div>
-          <div className="flex items-center gap-2 w-48">
+          <div className="flex items-start gap-2 w-24">
         <input
           type="number"
           value={localQuantity}
@@ -92,7 +92,7 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists, showDif
           
         />
       </div>
-      <div>
+      <div className="flex justify-end">
         <input
           type="text"
           value={localUnit}
@@ -104,7 +104,7 @@ const InventoryRow = React.memo(({ item, isEven, onUpdate, groceryLists, showDif
               e.target.blur();
             }
          }}
-         className={`w-32 rounded border px-2 py-1 ${isUpdating ? 'bg-gray-100' : ''}`}
+         className={`w-20 rounded border px-2 pr-1 text-right ${isUpdating ? 'bg-gray-100' : ''}`}
          disabled={isUpdating}
        />
        
@@ -548,16 +548,16 @@ export default function InventoryView() {
    {/* Column Headers */}
    <div className="col-span-2 grid grid-cols-2 gap-8 mb-4">
      {/* Left Column Headers */}
-     <div className="grid grid-cols-3 gap-4 px-4 font-semibold text-gray-700">
-       <div className="w-48">Item</div>
-       <div className="w-48">Quantity</div>
-       <div>Unit</div>
+     <div className="grid grid-cols-3 px-4 font-semibold text-gray-700">
+     <div className="w-36">Item</div>
+     <div className="w-24">Quantity</div>
+       <div className="flex justify-end">Unit</div>
      </div>
      {/* Right Column Headers */}
-     <div className="grid grid-cols-3 gap-4 px-4 font-semibold text-gray-700">
-       <div className="w-48">Item</div>
-       <div className="w-48">Quantity</div>
-       <div>Unit</div>
+     <div className="grid grid-cols-3 px-4 font-semibold text-gray-700">
+     <div className="w-36">Item</div>
+     <div className="w-24">Quantity</div>
+       <div className="flex justify-end">Unit</div>
      </div>
    </div>
    
