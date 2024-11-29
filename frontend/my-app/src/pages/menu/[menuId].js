@@ -154,12 +154,13 @@ export default function MenuDetail() {
     }
   };
 
-  const getIngredientColor = (ingredient) => {
-    const inFridge = fridgeItems.some(item => 
-      item.name.toLowerCase() === ingredient.toLowerCase() && item.quantity > 0
-    );
-    return inFridge ? 'text-green-600' : 'text-red-600';
-  };
+  const getIngredientColor = (ingredientName) => {
+       const inFridge = fridgeItems.some(item => 
+         item.name.toLowerCase() === ingredientName.toLowerCase() && 
+         item.quantity > 0
+       );
+       return inFridge ? 'text-green-600' : 'text-red-600';
+     };
 
   if (loading) {
     return (
@@ -283,14 +284,15 @@ export default function MenuDetail() {
       <div className="mb-4">
         <h4 className="font-medium mb-2">Ingredients:</h4>
         <ul className="space-y-1">
-          {Array.isArray(recipe.ingredients) && recipe.ingredients.map((ingredient, idx) => (
-            <li 
-              key={idx} 
-              className={getIngredientColor(ingredient)}
-            >
-              {ingredient}
-            </li>
-          ))}
+        {Array.isArray(recipe.ingredients) && recipe.ingredients.map((ingredient, idx) => (
+   <li 
+     key={idx} 
+     className={getIngredientColor(ingredient.name)}
+   >
+     {ingredient.quantity} {ingredient.unit} {ingredient.name}
+   </li>
+ ))}
+ 
         </ul>
       </div>
       <p className="text-sm text-gray-500">

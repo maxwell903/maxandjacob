@@ -327,85 +327,7 @@ def parse_grocery_receipt():
        return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/grocery-lists/<int:list_id>/add-menu/<int:menu_id>', methods=['POST'])
-def add_menu_to_grocery_list(list_id, menu_id):
-    try:
-        # Get the menu and its recipes
-        menu = Menu.query.get_or_404(menu_id)
-        menu_recipes = MenuRecipe.query.filter_by(menu_id=menu_id).all()
-        
-        # Add menu name as header
-        grocery_item = GroceryItem(
-            name=f"### {menu.name} ###",
-            list_id=list_id,
-            quantity=0,
-            unit='',
-            price_per=0,
-            total=0
-        )
-        db.session.add(grocery_item)
-        
-        # Get current fridge items for comparison
-        fridge_items = FridgeItem.query.all()
-        
-        # Process each recipe in the menu
-        for menu_recipe in menu_recipes:
-            recipe = Recipe.query.get(menu_recipe.recipe_id)
-            if not recipe:
-                continue
-                
-            # Add recipe name as subheader
-            recipe_header = GroceryItem(
-                name=f"**{recipe.name}**",
-                list_id=list_id,
-                quantity=0,
-                unit='',
-                price_per=0,
-                total=0
-            )
-            db.session.add(recipe_header)
-            
-            # Get recipe ingredients
-            ingredients = db.session.query(RecipeIngredient3.name)\
-                .filter(text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
-                .params(recipe_id=recipe.id)\
-                .all()
-            
-            # Add each ingredient
-            for ingredient in ingredients:
-                # Check if ingredient exists in fridge with quantity > 0
-                fridge_item = next(
-                    (item for item in fridge_items 
-                     if item.name.lower() == ingredient[0].lower() and item.quantity > 0),
-                    None
-                )
-                
-                grocery_item = GroceryItem(
-                    name=f"• {ingredient[0]}" if not fridge_item else f"✓ {ingredient[0]}",
-                    list_id=list_id,
-                    quantity=0,
-                    unit='',
-                    price_per=0,
-                    total=0
-                )
-                db.session.add(grocery_item)
 
-                # Ensure ingredient exists in fridge system
-                if not any(item.name.lower() == ingredient[0].lower() for item in fridge_items):
-                    new_fridge_item = FridgeItem(
-                        name=ingredient[0],
-                        quantity=0,
-                        unit=''
-                    )
-                    db.session.add(new_fridge_item)
-        
-        db.session.commit()
-        return jsonify({'message': 'Menu added to grocery list successfully'}), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error adding menu to grocery list: {str(e)}")
-        return jsonify({'error': str(e)}), 500
     
 # Add these new routes above the existing grocery list routes
 
@@ -623,20 +545,24 @@ def get_menu_recipes(menu_id):
         menu = Menu.query.get_or_404(menu_id)
         recipes = [mr.recipe for mr in menu.menu_recipes]
         
-        # Modified query to get ingredients from new table
         recipes_data = []
         for recipe in recipes:
-            ingredients = db.session.query(RecipeIngredient3.name)\
-                .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
-                .params(recipe_id=recipe.id)\
-                .all()
+            # Get ingredient details from recipe_ingredient_details table
+            ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe.id).all()
             
             recipes_data.append({
                 'id': recipe.id,
                 'name': recipe.name,
                 'description': recipe.description,
                 'prep_time': recipe.prep_time,
-                'ingredients': [ingredient[0] for ingredient in ingredients]
+                'ingredients': [
+                    {
+                        'name': detail.ingredient_name,
+                        'quantity': detail.quantity,
+                        'unit': detail.unit
+                    }
+                    for detail in ingredient_details
+                ]
             })
         
         return jsonify({
@@ -644,7 +570,6 @@ def get_menu_recipes(menu_id):
             'recipes': recipes_data
         })
     except Exception as e:
-        print(f"Error fetching menu recipes: {str(e)}")  # Add this for debugging
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/menus/<int:menu_id>/recipes', methods=['POST'])
@@ -1104,14 +1029,10 @@ class GroceryItem(db.Model):
 @app.route('/api/grocery-lists/<int:list_id>/add-recipe/<int:recipe_id>', methods=['POST'])
 def add_recipe_to_grocery_list(list_id, recipe_id):
     try:
-        # Get the recipe
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Get recipe ingredients
-        ingredients = db.session.query(RecipeIngredient3.name)\
-            .filter(text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
-            .params(recipe_id=recipe_id)\
-            .all()
+        # Get recipe ingredients from recipe_ingredient_details table
+        ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).all()
         
         # First add recipe name as header
         grocery_item = GroceryItem(
@@ -1128,30 +1049,30 @@ def add_recipe_to_grocery_list(list_id, recipe_id):
         fridge_items = FridgeItem.query.all()
         
         # Add each ingredient
-        for ingredient in ingredients:
+        for detail in ingredient_details:
             # Check if ingredient exists in fridge with quantity > 0
             fridge_item = next(
                 (item for item in fridge_items 
-                 if item.name.lower() == ingredient[0].lower() and item.quantity > 0),
+                 if item.name.lower() == detail.ingredient_name.lower() and item.quantity > 0),
                 None
             )
             
             grocery_item = GroceryItem(
-                name=f"• {ingredient[0]}" if not fridge_item else f"✓ {ingredient[0]}",
+                name=f"• {detail.ingredient_name}" if not fridge_item else f"✓ {detail.ingredient_name}",
                 list_id=list_id,
-                quantity=0,
-                unit='',
+                quantity=detail.quantity,
+                unit=detail.unit,
                 price_per=0,
                 total=0
             )
             db.session.add(grocery_item)
 
             # Ensure ingredient exists in fridge system
-            if not any(item.name.lower() == ingredient[0].lower() for item in fridge_items):
+            if not any(item.name.lower() == detail.ingredient_name.lower() for item in fridge_items):
                 new_fridge_item = FridgeItem(
-                    name=ingredient[0],
+                    name=detail.ingredient_name,
                     quantity=0,
-                    unit=''
+                    unit=detail.unit
                 )
                 db.session.add(new_fridge_item)
         
@@ -1160,7 +1081,81 @@ def add_recipe_to_grocery_list(list_id, recipe_id):
         
     except Exception as e:
         db.session.rollback()
-        print(f"Error adding recipe to grocery list: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/grocery-lists/<int:list_id>/add-menu/<int:menu_id>', methods=['POST'])
+def add_menu_to_grocery_list(list_id, menu_id):
+    try:
+        menu = Menu.query.get_or_404(menu_id)
+        menu_recipes = MenuRecipe.query.filter_by(menu_id=menu_id).all()
+        
+        # Add menu name as header
+        grocery_item = GroceryItem(
+            name=f"### {menu.name} ###",
+            list_id=list_id,
+            quantity=0,
+            unit='',
+            price_per=0,
+            total=0
+        )
+        db.session.add(grocery_item)
+        
+        # Get current fridge items for comparison
+        fridge_items = FridgeItem.query.all()
+        
+        # Process each recipe in the menu
+        for menu_recipe in menu_recipes:
+            recipe = Recipe.query.get(menu_recipe.recipe_id)
+            if not recipe:
+                continue
+                
+            # Add recipe name as subheader
+            recipe_header = GroceryItem(
+                name=f"**{recipe.name}**",
+                list_id=list_id,
+                quantity=0,
+                unit='',
+                price_per=0,
+                total=0
+            )
+            db.session.add(recipe_header)
+            
+            # Get recipe ingredients from recipe_ingredient_details table
+            ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe.id).all()
+            
+            # Add each ingredient
+            for detail in ingredient_details:
+                # Check if ingredient exists in fridge with quantity > 0
+                fridge_item = next(
+                    (item for item in fridge_items 
+                     if item.name.lower() == detail.ingredient_name.lower() and item.quantity > 0),
+                    None
+                )
+                
+                grocery_item = GroceryItem(
+                    name=f"• {detail.ingredient_name}" if not fridge_item else f"✓ {detail.ingredient_name}",
+                    list_id=list_id,
+                    quantity=detail.quantity,
+                    unit=detail.unit,
+                    price_per=0,
+                    total=0
+                )
+                db.session.add(grocery_item)
+
+                # Ensure ingredient exists in fridge system
+                if not any(item.name.lower() == detail.ingredient_name.lower() for item in fridge_items):
+                    new_fridge_item = FridgeItem(
+                        name=detail.ingredient_name,
+                        quantity=0,
+                        unit=detail.unit  
+                    )
+                    db.session.add(new_fridge_item)
+        
+        db.session.commit()
+        return jsonify({'message': 'Menu added to grocery list successfully'}), 201
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 # Also update the add_item_to_list function:
