@@ -1,33 +1,35 @@
-// Location: C:\Users\maxwa\maxandjacob\frontend\my-app\src\pages\add-recipe.js
+// Location: C:\Users\maxwa\Groshme\src\pages\add-recipe.js
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
-const AddRecipe = () => {  // Changed to arrow function
+const AddRecipe = () => {
   const router = useRouter();
   const [backPath, setBackPath] = useState('/');
   const [recipe, setRecipe] = useState({
-  
     name: '',
     description: '',
     instructions: '',
     prep_time: '',
-    ingredients: ['']
+    ingredients: [{ name: '', quantity: '', unit: '' }]
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleIngredientChange = (index, value) => {
+  const handleIngredientChange = (index, field, value) => {
     const newIngredients = [...recipe.ingredients];
-    newIngredients[index] = value;
+    newIngredients[index] = {
+      ...newIngredients[index],
+      [field]: value
+    };
     setRecipe({ ...recipe, ingredients: newIngredients });
   };
 
   const addIngredientField = () => {
-    setRecipe({ 
-      ...recipe, 
-      ingredients: [...recipe.ingredients, ''] 
+    setRecipe({
+      ...recipe,
+      ingredients: [...recipe.ingredients, { name: '', quantity: '', unit: '' }]
     });
   };
 
@@ -66,26 +68,25 @@ const AddRecipe = () => {  // Changed to arrow function
     const prevPath = localStorage.getItem('previousPath') || '/';
     setBackPath(prevPath);
   }, []);
-  
 
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
-  <div className="max-w-6xl mx-auto px-4 py-4">
-    <Link 
-      href={backPath}
-      className="text-blue-600 hover:text-blue-800"
-    >
-      ← Back to {backPath === "/" ? "Home" : 
-                 backPath === "/search" ? "Search" : 
-                 backPath === "/menus" ? "Menus" : "Previous Page"}
-    </Link>
-  </div>
-</nav>
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <Link
+            href={backPath}
+            className="text-blue-600 hover:text-blue-800"
+          >
+            ← Back to {backPath === "/" ? "Home" :
+              backPath === "/search" ? "Search" :
+                backPath === "/menus" ? "Menus" : "Previous Page"}
+          </Link>
+        </div>
+      </nav>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Add New Recipe</h1>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -149,14 +150,37 @@ const AddRecipe = () => {  // Changed to arrow function
             <div className="space-y-2">
               {recipe.ingredients.map((ingredient, index) => (
                 <div key={index} className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    className="flex-1 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
-                    value={ingredient}
-                    onChange={(e) => handleIngredientChange(index, e.target.value)}
-                    placeholder="Enter ingredient"
-                  />
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      required
+                      className="w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
+                      value={ingredient.name}
+                      onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+                      placeholder="Enter ingredient"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      className="w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
+                      value={ingredient.quantity}
+                      onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+                      placeholder="Qty"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2"
+                      value={ingredient.unit}
+                      onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+                      placeholder="Unit"
+                    />
+                  </div>
                   {recipe.ingredients.length > 1 && (
                     <button
                       type="button"
@@ -199,4 +223,4 @@ const AddRecipe = () => {  // Changed to arrow function
   );
 };
 
-export default AddRecipe;  // Changed export style
+export default AddRecipe;

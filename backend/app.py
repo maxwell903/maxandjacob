@@ -103,6 +103,17 @@ class GroceryList(db.Model):
     name = db.Column(db.String(100), nullable=False)
     created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+class RecipeIngredientDetails(db.Model):
+    __tablename__ = 'recipe_ingredient_details'
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id', ondelete='CASCADE'), nullable=False)
+    ingredient_name = db.Column(db.String(100), db.ForeignKey('recipe_ingredients3.name'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=0)
+    unit = db.Column(db.String(20))
+    
+    recipe = db.relationship('Recipe', backref=db.backref('ingredient_details', lazy=True, cascade='all, delete-orphan'))
+    ingredient = db.relationship('RecipeIngredient3', backref=db.backref('recipe_details', lazy=True))
+
 class ReceiptParser:
     # Expanded common unit variations
     UNITS = {
@@ -438,11 +449,14 @@ def get_recipe(recipe_id):
     try:
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Modified query to get ingredients from new table
-        ingredients = db.session.query(RecipeIngredient3.name)\
-            .filter(db.text(f'JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
-            .params(recipe_id=recipe_id)\
-            .all()
+        # Get ingredients with their quantities and units
+        ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).all()
+        
+        ingredient_data = [{
+            'name': detail.ingredient_name,
+            'quantity': detail.quantity,
+            'unit': detail.unit
+        } for detail in ingredient_details]
         
         recipe_data = {
             'id': recipe.id,
@@ -450,7 +464,7 @@ def get_recipe(recipe_id):
             'description': recipe.description,
             'instructions': recipe.instructions,
             'prep_time': recipe.prep_time,
-            'ingredients': [ingredient[0] for ingredient in ingredients]
+            'ingredients': ingredient_data
         }
         
         return jsonify(recipe_data)
@@ -518,7 +532,6 @@ def get_all_recipes():
         }), 500
 
 
-    
 @app.route('/api/recipe', methods=['POST'])
 def add_recipe():
     try:
@@ -534,7 +547,9 @@ def add_recipe():
         db.session.flush()  # Get the new recipe ID
         
         # Handle ingredients with the new table structure
-        for ingredient_name in data['ingredients']:
+        for ingredient_data in data['ingredients']:
+            ingredient_name = ingredient_data['name']
+            
             # Try to find existing ingredient
             ingredient = RecipeIngredient3.query.filter_by(name=ingredient_name).first()
             
@@ -551,6 +566,15 @@ def add_recipe():
                     recipe_ids=[new_recipe.id]
                 )
                 db.session.add(new_ingredient)
+            
+            # Add ingredient details
+            ingredient_detail = RecipeIngredientDetails(
+                recipe_id=new_recipe.id,
+                ingredient_name=ingredient_name,
+                quantity=float(ingredient_data['quantity']),
+                unit=ingredient_data['unit']
+            )
+            db.session.add(ingredient_detail)
         
         db.session.commit()
         
@@ -563,6 +587,7 @@ def add_recipe():
         db.session.rollback()
         print(f"Error adding recipe: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/menus', methods=['GET'])
 def get_menus():
@@ -1229,6 +1254,56 @@ def import_to_grocery_list():
          
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/api/recipe-ingredient-details', methods=['POST'])
+def add_recipe_ingredient_details():
+    try:
+        data = request.json
+        # Validate required fields
+        required_fields = ['recipe_id', 'ingredient_name', 'quantity']
+        if not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # Create the recipe ingredient details
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO recipe_ingredient_details 
+            (recipe_id, ingredient_name, quantity, unit)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (data['recipe_id'], data['ingredient_name'], 
+             data['quantity'], data.get('unit', ''))
+        )
+        db.commit()
+        return jsonify({'message': 'Recipe ingredient details added successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recipe/<int:recipe_id>/ingredients', methods=['GET'])
+def get_recipe_ingredients(recipe_id):
+    try:
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT ri.ingredient_name, ri.quantity, ri.unit
+            FROM recipe_ingredient_details ri
+            WHERE ri.recipe_id = %s
+            """,
+            (recipe_id,)
+        )
+        ingredients = [
+            {
+                'name': row[0],
+                'quantity': float(row[1]),
+                'unit': row[2]
+            }
+            for row in cursor.fetchall()
+        ]
+        return jsonify({'ingredients': ingredients})
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
      
