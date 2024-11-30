@@ -4,6 +4,8 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import NutritionModal from '@/components/NutritionModal';
 
+
+
 export default function RecipePage() {
   const router = useRouter();
   const { id } = router.query;
@@ -21,14 +23,27 @@ export default function RecipePage() {
   const [isNutritionModalOpen, setIsNutritionModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState(null);
 
-  const NutritionInfo = ({ nutrition }) => {
+
+
+  const NutritionInfo = ({ nutrition, quantity }) => {
     if (!nutrition) return null;
+  
+    // Calculate scaled nutrition values based on the actual quantity used
+    const scale = quantity / (nutrition.serving_size || 1);
+    const scaledNutrition = {
+      protein_grams: (nutrition.protein_grams * scale).toFixed(1),
+      fat_grams: (nutrition.fat_grams * scale).toFixed(1),
+      carbs_grams: (nutrition.carbs_grams * scale).toFixed(1),
+      serving_size: quantity,
+      serving_unit: nutrition.serving_unit
+    };
+  
     return (
       <div className="text-sm text-gray-500 ml-6">
-        <span>Protein: {nutrition.protein_grams}g • </span>
-        <span>Fat: {nutrition.fat_grams}g • </span>
-        <span>Carbs: {nutrition.carbs_grams}g • </span>
-        <span>Serving: {nutrition.serving_size} {nutrition.serving_unit}</span>
+        <span>Protein: {scaledNutrition.protein_grams}g • </span>
+        <span>Fat: {scaledNutrition.fat_grams}g • </span>
+        <span>Carbs: {scaledNutrition.carbs_grams}g • </span>
+        <span>Per {scaledNutrition.serving_size} {scaledNutrition.serving_unit}</span>
       </div>
     );
   };
@@ -402,13 +417,10 @@ export default function RecipePage() {
       <div className="flex items-center justify-between">
         <div>
           <span>{ingredient.quantity} {ingredient.unit} {ingredient.name}</span>
-          {ingredient.nutrition && (
-            <div className="ml-6 text-sm text-gray-500">
-              - {ingredient.nutrition.protein_grams}g's Protein |  
-              {ingredient.nutrition.carbs_grams}g's Carbs |  
-              {ingredient.nutrition.fat_grams}g's Fat
-            </div>
-          )}
+          <NutritionInfo 
+          nutrition={ingredient.nutrition} 
+          quantity={ingredient.quantity}
+        />
         </div>
         <button
           onClick={() => handleAddNutrition(index)}
@@ -469,6 +481,7 @@ export default function RecipePage() {
   ingredientName={selectedIngredient !== null ? recipe.ingredients[selectedIngredient].name : ''}
   ingredientIndex={selectedIngredient}
   currentNutrition={selectedIngredient !== null ? recipe.ingredients[selectedIngredient].nutrition : null}
+  ingredientQuantity={selectedIngredient !== null ? recipe.ingredients[selectedIngredient].quantity : 0}
 />
     </div>
   );

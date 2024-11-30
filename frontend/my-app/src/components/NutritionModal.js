@@ -1,46 +1,63 @@
 import React, { useState, useEffect } from 'react';
 
-// In NutritionModal.js
 const NutritionModal = ({ 
-    isOpen, 
-    onClose, 
-    onSubmit, 
-    ingredientName,
-    ingredientIndex,
-    currentNutrition 
-  }) => {
-    const [nutritionData, setNutritionData] = useState({
-      protein_grams: '',
-      fat_grams: '',
-      carbs_grams: '',
-      serving_size: '',
-      serving_unit: ''
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  ingredientName,
+  ingredientIndex,
+  currentNutrition,
+  ingredientQuantity // Add this prop
+}) => {
+  const [nutritionData, setNutritionData] = useState({
+    protein_grams: '',
+    fat_grams: '',
+    carbs_grams: '',
+    serving_size: '',
+    serving_unit: ''
+  });
+
+  const [displayedNutrition, setDisplayedNutrition] = useState({
+    protein_grams: '',
+    fat_grams: '',
+    carbs_grams: ''
+  });
+
+  useEffect(() => {
+    if (currentNutrition) {
+      setNutritionData(currentNutrition);
+      calculateDisplayedValues(currentNutrition);
+    } else {
+      setNutritionData({
+        protein_grams: '',
+        fat_grams: '',
+        carbs_grams: '',
+        serving_size: '',
+        serving_unit: ''
+      });
+      setDisplayedNutrition({
+        protein_grams: '',
+        fat_grams: '',
+        carbs_grams: ''
+      });
+    }
+  }, [currentNutrition, ingredientQuantity]);
+
+  const calculateDisplayedValues = (data) => {
+    if (!data.serving_size || data.serving_size === '0') return;
+
+    const ratio = ingredientQuantity / parseFloat(data.serving_size);
+    setDisplayedNutrition({
+      protein_grams: (parseFloat(data.protein_grams || 0) * ratio).toFixed(1),
+      fat_grams: (parseFloat(data.fat_grams || 0) * ratio).toFixed(1),
+      carbs_grams: (parseFloat(data.carbs_grams || 0) * ratio).toFixed(1)
     });
-  
-    useEffect(() => {
-      if (currentNutrition) {
-        setNutritionData(currentNutrition);
-      } else {
-        setNutritionData({
-          protein_grams: '',
-          fat_grams: '',
-          carbs_grams: '',
-          serving_size: '',
-          serving_unit: ''
-        });
-      }
-    }, [currentNutrition, isOpen]);
-  
-   
-  
+  };
 
-  if (!isOpen) return null;
-
-  // In NutritionModal.js, update handleSubmit:
-const handleSubmit = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const formattedData = {
-      ingredientIndex: ingredientIndex,  // Include the index
+      ingredientIndex: ingredientIndex,
       protein_grams: parseFloat(nutritionData.protein_grams) || 0,
       fat_grams: parseFloat(nutritionData.fat_grams) || 0,
       carbs_grams: parseFloat(nutritionData.carbs_grams) || 0,
@@ -50,6 +67,8 @@ const handleSubmit = (e) => {
     onSubmit(formattedData);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -78,10 +97,14 @@ const handleSubmit = (e) => {
                   step="0.1"
                   min="0"
                   value={nutritionData[key]}
-                  onChange={(e) => setNutritionData(prev => ({
-                    ...prev,
-                    [key]: e.target.value
-                  }))}
+                  onChange={(e) => {
+                    const updatedData = {
+                      ...nutritionData,
+                      [key]: e.target.value
+                    };
+                    setNutritionData(updatedData);
+                    calculateDisplayedValues(updatedData);
+                  }}
                   className="w-full rounded-md border border-gray-300 p-2"
                   placeholder="0.0"
                 />
@@ -104,6 +127,17 @@ const handleSubmit = (e) => {
               placeholder="e.g., grams, cups, oz"
             />
           </div>
+
+          {nutritionData.serving_size && ingredientQuantity && (
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium mb-2">Calculated Nutrition Values:</h3>
+              <div className="space-y-1 text-sm">
+                <p>Protein: {displayedNutrition.protein_grams}g</p>
+                <p>Fat: {displayedNutrition.fat_grams}g</p>
+                <p>Carbs: {displayedNutrition.carbs_grams}g</p>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 mt-6">
             <button
