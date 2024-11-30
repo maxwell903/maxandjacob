@@ -407,7 +407,17 @@ export default function RecipePage() {
               </button>
             </div>
           </div>
-          <p className="mb-6 text-gray-600">{recipe.description}</p>
+          <div className="mb-6">
+   <p className="text-gray-600">{recipe.description}</p>
+   {recipe.total_nutrition && (
+     <div className="mt-2 text-sm text-gray-600">
+       <span>Total Nutrition: </span>
+      <span>Protein: {recipe.total_nutrition.protein_grams}g • </span>
+       <span>Fat: {recipe.total_nutrition.fat_grams}g • </span>
+       <span>Carbs: {recipe.total_nutrition.carbs_grams}g</span>
+     </div>
+   )}
+ </div>
           <div className="mb-6">
   <h2 className="mb-2 text-xl font-semibold">Ingredients</h2>
   <ul className="list-inside space-y-2">

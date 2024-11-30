@@ -407,6 +407,12 @@ def get_recipe(recipe_id):
             .all()
         
         ingredient_data = []
+        total_nutrition = {
+           'protein_grams': 0,
+           'fat_grams': 0,
+           'carbs_grams': 0
+        }
+
         for qty in ingredient_quantities:
             ingredient_info = {
                 'name': qty.ingredient.name,
@@ -424,6 +430,12 @@ def get_recipe(recipe_id):
                     'serving_size': qty.nutrition.serving_size,
                     'serving_unit': qty.nutrition.serving_unit
                 }
+
+                if qty.nutrition.serving_size and qty.nutrition.serving_size > 0:
+                   ratio = qty.quantity / qty.nutrition.serving_size
+                   total_nutrition['protein_grams'] += (qty.nutrition.protein_grams or 0) * ratio
+                   total_nutrition['fat_grams'] += (qty.nutrition.fat_grams or 0) * ratio
+                   total_nutrition['carbs_grams'] += (qty.nutrition.carbs_grams or 0) * ratio
             
             ingredient_data.append(ingredient_info)
         
@@ -433,8 +445,13 @@ def get_recipe(recipe_id):
             'description': recipe.description,
             'instructions': recipe.instructions,
             'prep_time': recipe.prep_time,
-            'ingredients': ingredient_data
-        }
+            'ingredients': ingredient_data,
+            'total_nutrition': {
+                'protein_grams': round(total_nutrition['protein_grams'], 1),
+               'fat_grams': round(total_nutrition['fat_grams'], 1),
+               'carbs_grams': round(total_nutrition['carbs_grams'], 1)
+           }
+       }
         
         return jsonify(recipe_data)
     except Exception as e:
