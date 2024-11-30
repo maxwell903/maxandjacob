@@ -1,17 +1,16 @@
 // pages/index.js
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';  // Add this with other imports at top
+import { useRouter } from 'next/router';
 
 export default function Home() {
-  const router = useRouter();  // Add this as first line inside component
+  const router = useRouter();
   const [homeData, setHomeData] = useState({
     total_recipes: 0,
     latest_recipes: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,12 +65,12 @@ export default function Home() {
               </Link>
 
               <Link 
-  href="/add-recipe"
-  className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
-  onClick={() => localStorage.setItem('previousPath', '/')}
->
-  Add New Recipe
-</Link>
+                href="/add-recipe"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
+                onClick={() => localStorage.setItem('previousPath', '/')}
+              >
+                Add New Recipe
+              </Link>
 
               <Link 
                 href="/all-recipes"
@@ -81,21 +80,20 @@ export default function Home() {
               </Link>
 
               <Link 
-  href="/my-fridge"
-  className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
-  onClick={() => localStorage.setItem('previousPath', '/')}
->
-  My Fridge
-</Link>
+                href="/my-fridge"
+                className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 transition-colors duration-200"
+                onClick={() => localStorage.setItem('previousPath', '/')}
+              >
+                My Fridge
+              </Link>
 
-              
-<Link
-  href="/grocerylistId"
-  className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
-  onClick={() => localStorage.setItem('previousPath', '/')}
->
-  Grocery Lists
-</Link>
+              <Link
+                href="/grocerylistId"
+                className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
+                onClick={() => localStorage.setItem('previousPath', '/')}
+              >
+                Grocery Lists
+              </Link>
 
               <Link 
                 href="/menus"
@@ -103,13 +101,14 @@ export default function Home() {
               >
                 My Menus
               </Link>
+
               <Link 
-    href="/grocery-bill"
-    className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
-    onClick={() => localStorage.setItem('previousPath', '/')}
-  >
-    Grocery Bill
-  </Link>
+                href="/grocery-bill"
+                className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
+                onClick={() => localStorage.setItem('previousPath', '/')}
+              >
+                Grocery Bill
+              </Link>
             </div>
 
             {error && (
@@ -125,8 +124,8 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4">
           <h2 className="mb-8 text-2xl font-bold text-gray-900">Latest Recipes</h2>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-  {homeData.latest_recipes.map((recipe) => (
-    <Link 
+          {homeData.latest_recipes.map((recipe) => (
+  <Link 
     href={`/recipe/${recipe.id}`}
     key={recipe.id}
     className="block no-underline"
@@ -135,19 +134,25 @@ export default function Home() {
       localStorage.setItem('lastPath', '/');
     }}
   >
-      <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-        <h3 className="mb-2 text-lg font-semibold text-gray-900">{recipe.name}</h3>
-        <p className="mb-4 text-gray-600">{recipe.description}</p>
-        <p className="text-sm text-gray-500">
-          Prep time: {recipe.prep_time} mins
-        </p>
-        <div className="mt-4 text-green-600 hover:text-green-700">
-          View Recipe →
-        </div>
+    <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+      <h3 className="mb-2 text-lg font-semibold text-gray-900">{recipe.name}</h3>
+      <p className="mb-4 text-gray-600">{recipe.description}</p>
+      {/* Add Total Nutrition Information */}
+      <p className="text-sm text-gray-500 mb-1">
+        Protein: {recipe.total_nutrition?.protein_grams || 0}g • 
+        Fat: {recipe.total_nutrition?.fat_grams || 0}g • 
+        Carbs: {recipe.total_nutrition?.carbs_grams || 0}g
+      </p>
+      <p className="text-sm text-gray-500">
+        Prep time: {recipe.prep_time} mins
+      </p>
+      <div className="mt-4 text-green-600 hover:text-green-700">
+        View Recipe →
       </div>
-    </Link>
-  ))}
-</div>
+    </div>
+  </Link>
+))}
+          </div>
         </div>
       </div>
     </div>

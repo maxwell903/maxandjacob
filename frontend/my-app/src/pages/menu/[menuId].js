@@ -278,34 +278,38 @@ export default function MenuDetail() {
       </button>
 
       <h3 className="mb-2 text-lg font-semibold text-gray-900">
-        {recipe.name}
-      </h3>
-      <p className="mb-4 text-gray-600">{recipe.description}</p>
-      <div className="mb-4">
-        <h4 className="font-medium mb-2">Ingredients:</h4>
-        <ul className="space-y-1">
+      {recipe.name}
+    </h3>
+    <p className="mb-4 text-gray-600">{recipe.description}</p>
+    <div className="mb-4">
+      <h4 className="font-medium mb-2">Ingredients:</h4>
+      <ul className="space-y-1">
         {Array.isArray(recipe.ingredients) && recipe.ingredients.map((ingredient, idx) => (
-   <li 
-     key={idx} 
-     className={getIngredientColor(ingredient.name)}
-   >
-     {ingredient.quantity} {ingredient.unit} {ingredient.name}
-   </li>
- ))}
- 
-        </ul>
-      </div>
-      <p className="text-sm text-gray-500">
-        Prep time: {recipe.prep_time} mins
-      </p>
-      <Link 
-        href={`/recipe/${recipe.id}`}
-        className="mt-4 inline-block text-blue-600 hover:text-blue-700"
-      >
-        View Recipe →
-      </Link>
+          <li 
+            key={idx} 
+            className={getIngredientColor(ingredient.name)}
+          >
+            {ingredient.quantity} {ingredient.unit} {ingredient.name}
+          </li>
+        ))}
+      </ul>
     </div>
-  ))}
+    <p className="text-sm text-gray-500 mb-1">
+      Protein: {recipe.total_nutrition?.protein_grams || 0}g • 
+      Fat: {recipe.total_nutrition?.fat_grams || 0}g • 
+      Carbs: {recipe.total_nutrition?.carbs_grams || 0}g
+    </p>
+    <p className="text-sm text-gray-500">
+      Prep time: {recipe.prep_time} mins
+    </p>
+    <Link 
+      href={`/recipe/${recipe.id}`}
+      className="mt-4 inline-block text-blue-600 hover:text-blue-700"
+    >
+      View Recipe →
+    </Link>
+  </div>
+))}
 </div>
   
         {showGroceryListModal && (

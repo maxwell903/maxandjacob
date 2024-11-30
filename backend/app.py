@@ -469,7 +469,24 @@ def home_data():
            'name': recipe.name,
            'description': recipe.description,
            'prep_time': recipe.prep_time,
-           'ingredients': [ingredient.name for ingredient in recipe.ingredients]
+           'ingredients': [ingredient.name for ingredient in recipe.ingredients],
+           'total_nutrition': {
+                'protein_grams': sum(
+                    (ing.nutrition.protein_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                    for ing in recipe.ingredient_quantities 
+                    if ing.nutrition and ing.nutrition.serving_size
+                ),
+                'fat_grams': sum(
+                    (ing.nutrition.fat_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                    for ing in recipe.ingredient_quantities 
+                    if ing.nutrition and ing.nutrition.serving_size
+                ),
+                'carbs_grams': sum(
+                    (ing.nutrition.carbs_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                    for ing in recipe.ingredient_quantities 
+                    if ing.nutrition and ing.nutrition.serving_size
+                )
+            }
        } for recipe in latest_recipes]
        
        return jsonify({
@@ -482,28 +499,55 @@ def home_data():
            'total_recipes': 0,
            'latest_recipes': []
        })
-   
+    
+# All Recipes Route
 @app.route('/api/all-recipes')
 def get_all_recipes():
-    print("Hitting all-recipes endpoint") 
     try:
-        recipes = Recipe.query.order_by(Recipe.id.asc()).all()
+        # Get all recipes with eager loading of related data
+        recipes = Recipe.query\
+            .options(
+                db.joinedload(Recipe.ingredients),
+                db.joinedload(Recipe.ingredient_quantities)\
+                  .joinedload(RecipeIngredientQuantity.nutrition)
+            )\
+            .order_by(Recipe.id.asc())\
+            .all()
+            
         print(f"Found {len(recipes)} recipes")
         
         recipes_data = []
         for recipe in recipes:
-            # Get ingredients using the new recipe_ingredients3 table
+            # Get ingredients using the recipe_ingredients3 table
             ingredients = db.session.query(RecipeIngredient3.name)\
                 .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
                 .params(recipe_id=recipe.id)\
                 .all()
             
+            # Calculate nutrition totals
             recipes_data.append({
                 'id': recipe.id,
                 'name': recipe.name,
                 'description': recipe.description,
                 'prep_time': recipe.prep_time,
-                'ingredients': [ingredient[0] for ingredient in ingredients]
+                'ingredients': [ingredient[0] for ingredient in ingredients],
+                'total_nutrition': {
+                    'protein_grams': sum(
+                        (ing.nutrition.protein_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    ),
+                    'fat_grams': sum(
+                        (ing.nutrition.fat_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    ),
+                    'carbs_grams': sum(
+                        (ing.nutrition.carbs_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    )
+                }
             })
         
         return jsonify({
@@ -511,7 +555,7 @@ def get_all_recipes():
             'count': len(recipes_data)
         })
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error fetching all recipes: {str(e)}")
         return jsonify({
             'recipes': [],
             'count': 0
@@ -608,13 +652,29 @@ def create_menu():
 @app.route('/api/menus/<int:menu_id>/recipes', methods=['GET'])
 def get_menu_recipes(menu_id):
     try:
+        # Get menu with recipes
         menu = Menu.query.get_or_404(menu_id)
-        recipes = [mr.recipe for mr in menu.menu_recipes]
+        recipes = []
+        
+        # Get all recipes in menu with nutrition data
+        for menu_recipe in menu.menu_recipes:
+            recipe = Recipe.query\
+                .options(
+                    db.joinedload(Recipe.ingredients),
+                    db.joinedload(Recipe.ingredient_quantities)\
+                      .joinedload(RecipeIngredientQuantity.nutrition)
+                )\
+                .get(menu_recipe.recipe_id)
+            
+            if recipe:
+                recipes.append(recipe)
         
         recipes_data = []
         for recipe in recipes:
             # Get ingredient details from recipe_ingredient_details table
-            ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe.id).all()
+            ingredient_details = RecipeIngredientDetails.query\
+                .filter_by(recipe_id=recipe.id)\
+                .all()
             
             recipes_data.append({
                 'id': recipe.id,
@@ -628,7 +688,24 @@ def get_menu_recipes(menu_id):
                         'unit': detail.unit
                     }
                     for detail in ingredient_details
-                ]
+                ],
+                'total_nutrition': {
+                    'protein_grams': sum(
+                        (ing.nutrition.protein_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    ),
+                    'fat_grams': sum(
+                        (ing.nutrition.fat_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    ),
+                    'carbs_grams': sum(
+                        (ing.nutrition.carbs_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                        for ing in recipe.ingredient_quantities 
+                        if ing.nutrition and ing.nutrition.serving_size
+                    )
+                }
             })
         
         return jsonify({
@@ -636,7 +713,9 @@ def get_menu_recipes(menu_id):
             'recipes': recipes_data
         })
     except Exception as e:
+        print(f"Error fetching menu recipes: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/menus/<int:menu_id>/recipes', methods=['POST'])
 def add_recipe_to_menu(menu_id):
@@ -899,28 +978,12 @@ def clear_fridge_items():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-
-
-
-
-    
-
-
-
-
-    
-
-    
-
-    
-
-    
 @app.route('/api/search')
 def search():
     ingredients = request.args.getlist('ingredient')
     try:
         if ingredients:
-            # Create a query that properly handles JSON array of recipe_ids
+            # Create a query that handles JSON array of recipe_ids
             subquery = """
                 WITH RECURSIVE numbered_ingredients AS (
                     SELECT name, recipe_ids
@@ -933,9 +996,12 @@ def search():
                     FROM numbered_ingredients r
                     CROSS JOIN (
                         SELECT a.N + b.N * 10 + c.N * 100 as n
-                        FROM (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
-                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b
-                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) c
+                        FROM (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+                              UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
+                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+                                   UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b
+                        CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+                                   UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) c
                     ) numbers
                     WHERE JSON_UNQUOTE(JSON_EXTRACT(r.recipe_ids, CONCAT('$[', numbers.n, ']'))) IS NOT NULL
                     GROUP BY JSON_UNQUOTE(JSON_EXTRACT(r.recipe_ids, CONCAT('$[', numbers.n, ']')))
@@ -948,15 +1014,24 @@ def search():
             
             ingredient_pattern = '|'.join(ingredients)
             
+            # Execute the search query
             recipes = db.session.execute(text(subquery), {
                 'ingredient_pattern': ingredient_pattern,
                 'ingredient_count': len(ingredients)
             }).all()
             
-            # Get ingredients for each recipe
+            # Get recipes with nutrition data
             recipes_data = []
-            for recipe in recipes:
-                # Fetch ingredients using the recipe_ingredients3 table
+            for recipe_row in recipes:
+                recipe = Recipe.query\
+                    .options(
+                        db.joinedload(Recipe.ingredients),
+                        db.joinedload(Recipe.ingredient_quantities)\
+                          .joinedload(RecipeIngredientQuantity.nutrition)
+                    )\
+                    .get(recipe_row.id)
+                
+                # Get ingredients using recipe_ingredients3 table
                 ingredients = db.session.query(RecipeIngredient3.name)\
                     .filter(db.text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))'))\
                     .params(recipe_id=recipe.id)\
@@ -967,7 +1042,24 @@ def search():
                     'name': recipe.name,
                     'description': recipe.description,
                     'prep_time': recipe.prep_time,
-                    'ingredients': [ingredient[0] for ingredient in ingredients]
+                    'ingredients': [ingredient[0] for ingredient in ingredients],
+                    'total_nutrition': {
+                        'protein_grams': sum(
+                            (ing.nutrition.protein_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                            for ing in recipe.ingredient_quantities 
+                            if ing.nutrition and ing.nutrition.serving_size
+                        ),
+                        'fat_grams': sum(
+                            (ing.nutrition.fat_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                            for ing in recipe.ingredient_quantities 
+                            if ing.nutrition and ing.nutrition.serving_size
+                        ),
+                        'carbs_grams': sum(
+                            (ing.nutrition.carbs_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                            for ing in recipe.ingredient_quantities 
+                            if ing.nutrition and ing.nutrition.serving_size
+                        )
+                    }
                 })
             
             return jsonify({

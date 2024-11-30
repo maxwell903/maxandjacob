@@ -116,30 +116,35 @@ export default function AllRecipes() {
         />
 
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredRecipes.map((recipe) => (
-            <Link
-              href={`/recipe/${recipe.id}`}
-              key={recipe.id}
-              className="block no-underline"
-              onClick={() => {
-                localStorage.setItem('actualPreviousPath', '/all-recipes');
-                localStorage.setItem('lastPath', '/all-recipes');
-              }}
-            >
-              <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
-                <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                  {recipe.name}
-                </h3>
-                <p className="mb-4 text-gray-600">{recipe.description}</p>
-                <p className="text-sm text-gray-500">
-                  Prep time: {recipe.prep_time} mins
-                </p>
-                <div className="mt-4 text-blue-600 hover:text-blue-700">
-                  View Recipe →
-                </div>
-              </div>
-            </Link>
-          ))}
+        {filteredRecipes.map((recipe) => (
+  <Link
+    href={`/recipe/${recipe.id}`}
+    key={recipe.id}
+    className="block no-underline"
+    onClick={() => {
+      localStorage.setItem('actualPreviousPath', '/all-recipes');
+      localStorage.setItem('lastPath', '/all-recipes');
+    }}
+  >
+    <div className="rounded-lg bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+      <h3 className="mb-2 text-lg font-semibold text-gray-900">
+        {recipe.name}
+      </h3>
+      <p className="mb-4 text-gray-600">{recipe.description}</p>
+      <p className="text-sm text-gray-500 mb-1">
+        Protein: {recipe.total_nutrition?.protein_grams || 0}g • 
+        Fat: {recipe.total_nutrition?.fat_grams || 0}g • 
+        Carbs: {recipe.total_nutrition?.carbs_grams || 0}g
+      </p>
+      <p className="text-sm text-gray-500">
+        Prep time: {recipe.prep_time} mins
+      </p>
+      <div className="mt-4 text-blue-600 hover:text-blue-700">
+        View Recipe →
+      </div>
+    </div>
+  </Link>
+))}
         </div>
       </div>
     </div>
