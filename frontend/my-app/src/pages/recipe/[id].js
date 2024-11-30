@@ -41,6 +41,7 @@ export default function RecipePage() {
   
   const handleNutritionSubmit = async (nutritionData) => {
     try {
+      console.log('Submitting nutrition data:', nutritionData); // Debug log
       const response = await fetch(`http://localhost:5000/api/recipe/${id}/ingredients/${nutritionData.ingredientIndex}/nutrition`, {
         method: 'POST',
         headers: {
@@ -63,6 +64,7 @@ export default function RecipePage() {
       await fetchRecipe();
       setIsNutritionModalOpen(false);
     } catch (err) {
+      console.error('Error saving nutrition:', err); // Debug log
       setError(err.message);
     }
   };
@@ -394,26 +396,34 @@ export default function RecipePage() {
           <div className="mb-6">
   <h2 className="mb-2 text-xl font-semibold">Ingredients</h2>
   <ul className="list-inside space-y-2">
-    {recipe.ingredients.map((ingredient, index) => (
-      <li key={index} className="text-gray-600">
-        <div className="flex items-center justify-between">
-          <div>
-            <span>{ingredient.quantity} {ingredient.unit} {ingredient.name}</span>
-            {ingredient.nutrition && <NutritionInfo nutrition={ingredient.nutrition} />}
-          </div>
-          <button
-            onClick={() => handleAddNutrition(index)}
-            className={`px-3 py-1 rounded-md ${
-              ingredient.nutrition 
-                ? 'bg-green-500 text-white hover:bg-green-600' 
-                : 'bg-green-100 text-green-700 hover:bg-green-200'
-            }`}
-          >
-            {ingredient.nutrition ? 'Edit Nutrition' : 'Add Nutrition'}
-          </button>
+  {recipe.ingredients.map((ingredient, index) => (
+  <li key={index} className="text-gray-600">
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between">
+        <div>
+          <span>{ingredient.quantity} {ingredient.unit} {ingredient.name}</span>
+          {ingredient.nutrition && (
+            <div className="ml-6 text-sm text-gray-500">
+              - {ingredient.nutrition.protein_grams}g's Protein |  
+              {ingredient.nutrition.carbs_grams}g's Carbs |  
+              {ingredient.nutrition.fat_grams}g's Fat
+            </div>
+          )}
         </div>
-      </li>
-    ))}
+        <button
+          onClick={() => handleAddNutrition(index)}
+          className={`px-3 py-1 rounded-md ${
+            ingredient.nutrition 
+              ? 'bg-green-500 text-white hover:bg-green-600' 
+              : 'bg-green-100 text-green-700 hover:bg-green-200'
+          }`}
+        >
+          {ingredient.nutrition ? 'Edit Nutrition' : 'Add Nutrition'}
+        </button>
+      </div>
+    </div>
+  </li>
+))}
   </ul>
 </div>
           <div className="mb-6">

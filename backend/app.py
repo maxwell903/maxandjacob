@@ -400,14 +400,32 @@ def get_recipe(recipe_id):
     try:
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Get ingredients with quantities
-        ingredient_quantities = RecipeIngredientQuantity.query.filter_by(recipe_id=recipe_id).all()
+        # Get ingredients with quantities and nutrition info
+        ingredient_quantities = RecipeIngredientQuantity.query\
+            .filter_by(recipe_id=recipe_id)\
+            .outerjoin(RecipeIngredientNutrition)\
+            .all()
         
-        ingredient_data = [{
-            'name': qty.ingredient.name,
-            'quantity': qty.quantity,
-            'unit': qty.unit
-        } for qty in ingredient_quantities]
+        ingredient_data = []
+        for qty in ingredient_quantities:
+            ingredient_info = {
+                'name': qty.ingredient.name,
+                'quantity': qty.quantity,
+                'unit': qty.unit,
+                'nutrition': None
+            }
+            
+            # Add nutrition info if available
+            if hasattr(qty, 'nutrition') and qty.nutrition:
+                ingredient_info['nutrition'] = {
+                    'protein_grams': qty.nutrition.protein_grams,
+                    'fat_grams': qty.nutrition.fat_grams,
+                    'carbs_grams': qty.nutrition.carbs_grams,
+                    'serving_size': qty.nutrition.serving_size,
+                    'serving_unit': qty.nutrition.serving_unit
+                }
+            
+            ingredient_data.append(ingredient_info)
         
         recipe_data = {
             'id': recipe.id,
@@ -1380,28 +1398,37 @@ def get_recipe_ingredients(recipe_id):
 def add_ingredient_nutrition(recipe_id, ingredient_index):
     try:
         data = request.json
+        print(f"Received nutrition data: {data}")  # Debug log
         
         # Get the recipe ingredient quantity record by index
-        quantity_record = RecipeIngredientQuantity.query.filter_by(
-            recipe_id=recipe_id
-        ).offset(ingredient_index).first()
+        quantity_records = RecipeIngredientQuantity.query.filter_by(recipe_id=recipe_id).all()
         
-        if not quantity_record:
-            return jsonify({'error': 'Recipe ingredient not found'}), 404
+        if ingredient_index >= len(quantity_records):
+            print(f"Invalid index: {ingredient_index}, total records: {len(quantity_records)}")
+            return jsonify({'error': 'Invalid ingredient index'}), 400
+            
+        quantity_record = quantity_records[ingredient_index]
+        print(f"Found quantity record: {quantity_record.id}")
 
-        # Create nutrition record
+        # First delete any existing nutrition record
+        RecipeIngredientNutrition.query.filter_by(
+            recipe_ingredient_quantities_id=quantity_record.id
+        ).delete()
+        
+        # Create new nutrition record
         nutrition = RecipeIngredientNutrition(
             recipe_ingredient_quantities_id=quantity_record.id,
-            protein_grams=data.get('protein_grams'),
-            fat_grams=data.get('fat_grams'),
-            carbs_grams=data.get('carbs_grams'),
-            serving_size=data.get('serving_size'),
-            serving_unit=data.get('serving_unit')
+            protein_grams=data.get('protein_grams', 0),
+            fat_grams=data.get('fat_grams', 0),
+            carbs_grams=data.get('carbs_grams', 0),
+            serving_size=data.get('serving_size', 0),
+            serving_unit=data.get('serving_unit', '')
         )
         
         db.session.add(nutrition)
         db.session.commit()
         
+        print("Successfully saved nutrition data")
         return jsonify({'message': 'Nutrition info added successfully'}), 200
         
     except Exception as e:
