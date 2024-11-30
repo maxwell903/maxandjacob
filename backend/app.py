@@ -33,6 +33,22 @@ class Recipe(db.Model):
    instructions = db.Column(db.Text)
    prep_time = db.Column(db.Integer)
    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+   ingredients = db.relationship(
+        'Ingredient',
+        secondary='recipe_ingredient_quantities',
+        backref=db.backref('recipes', lazy=True)
+    )
+
+class RecipeIngredientQuantity(db.Model):
+    __tablename__ = 'recipe_ingredient_quantities'
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id', ondelete='CASCADE'), nullable=False)
+    ingredient_id = db.Column(db.Integer, db.ForeignKey('ingredients.id', ondelete='CASCADE'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+    unit = db.Column(db.String(20))
+    
+    recipe = db.relationship('Recipe', backref=db.backref('ingredient_quantities', lazy=True))
+    ingredient = db.relationship('Ingredient', backref=db.backref('recipe_quantities', lazy=True))
 
 
 # Add this near the top with other model definitions
@@ -42,12 +58,25 @@ class RecipeIngredient3(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     recipe_ids = db.Column(db.JSON)
 
+class RecipeIngredientNutrition(db.Model):
+    __tablename__ = 'recipe_ingredient_nutrition'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_ingredient_quantities_id = db.Column(db.Integer, db.ForeignKey('recipe_ingredient_quantities.id', ondelete='CASCADE'), nullable=False)
+    protein_grams = db.Column(db.Float, nullable=True)
+    fat_grams = db.Column(db.Float, nullable=True)
+    carbs_grams = db.Column(db.Float, nullable=True)
+    serving_size = db.Column(db.Float, nullable=True)
+    serving_unit = db.Column(db.String(20), nullable=True)
+    
+    # Add relationship to RecipeIngredientQuantity
+    recipe_ingredient = db.relationship('RecipeIngredientQuantity', backref=db.backref('nutrition', uselist=False, cascade='all, delete-orphan'))
+
 
 class Ingredient(db.Model):
+    __tablename__ = 'ingredients'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'), nullable=False)
-    recipe = db.relationship('Recipe', backref=db.backref('ingredients', lazy=True))
+    name = db.Column(db.String(100), nullable=False, unique=True)
 
 class Menu(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -365,20 +394,20 @@ def delete_grocery_item(list_id, item_id):
         print(f"Error deleting grocery item: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Update the get_recipe function
+
 @app.route('/api/recipe/<int:recipe_id>')
 def get_recipe(recipe_id):
     try:
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Get ingredients with their quantities and units
-        ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).all()
+        # Get ingredients with quantities
+        ingredient_quantities = RecipeIngredientQuantity.query.filter_by(recipe_id=recipe_id).all()
         
         ingredient_data = [{
-            'name': detail.ingredient_name,
-            'quantity': detail.quantity,
-            'unit': detail.unit
-        } for detail in ingredient_details]
+            'name': qty.ingredient.name,
+            'quantity': qty.quantity,
+            'unit': qty.unit
+        } for qty in ingredient_quantities]
         
         recipe_data = {
             'id': recipe.id,
@@ -454,11 +483,14 @@ def get_all_recipes():
         }), 500
 
 
+# In app.py
+
 @app.route('/api/recipe', methods=['POST'])
 def add_recipe():
     try:
         data = request.json
         
+        # Create the recipe
         new_recipe = Recipe(
             name=data['name'],
             description=data['description'],
@@ -466,40 +498,40 @@ def add_recipe():
             prep_time=int(data['prep_time'])
         )
         db.session.add(new_recipe)
-        db.session.flush()  # Get the new recipe ID
+        db.session.flush()  # Get the recipe ID while keeping transaction open
         
-        # Handle ingredients with the new table structure
+        # Process each ingredient and its nutrition data
         for ingredient_data in data['ingredients']:
-            ingredient_name = ingredient_data['name']
+            # Get or create ingredient
+            ingredient = Ingredient.query.filter_by(name=ingredient_data['name']).first()
+            if not ingredient:
+                ingredient = Ingredient(name=ingredient_data['name'])
+                db.session.add(ingredient)
+                db.session.flush()
             
-            # Try to find existing ingredient
-            ingredient = RecipeIngredient3.query.filter_by(name=ingredient_name).first()
-            
-            if ingredient:
-                # Update existing ingredient's recipe_ids
-                current_ids = ingredient.recipe_ids if ingredient.recipe_ids else []
-                if new_recipe.id not in current_ids:
-                    current_ids.append(new_recipe.id)
-                ingredient.recipe_ids = current_ids
-            else:
-                # Create new ingredient
-                new_ingredient = RecipeIngredient3(
-                    name=ingredient_name,
-                    recipe_ids=[new_recipe.id]
-                )
-                db.session.add(new_ingredient)
-            
-            # Add ingredient details
-            ingredient_detail = RecipeIngredientDetails(
+            # Create quantity association
+            quantity = RecipeIngredientQuantity(
                 recipe_id=new_recipe.id,
-                ingredient_name=ingredient_name,
+                ingredient_id=ingredient.id,
                 quantity=float(ingredient_data['quantity']),
                 unit=ingredient_data['unit']
             )
-            db.session.add(ingredient_detail)
+            db.session.add(quantity)
+            db.session.flush()
+            
+            # Add nutrition data if provided
+            if ingredient_data.get('nutritionData'):
+                nutrition = RecipeIngredientNutrition(
+                    recipe_ingredient_quantities_id=quantity.id,
+                    protein_grams=ingredient_data['nutritionData'].get('protein_grams'),
+                    fat_grams=ingredient_data['nutritionData'].get('fat_grams'),
+                    carbs_grams=ingredient_data['nutritionData'].get('carbs_grams'),
+                    serving_size=ingredient_data['nutritionData'].get('serving_size'),
+                    serving_unit=ingredient_data['nutritionData'].get('serving_unit')
+                )
+                db.session.add(nutrition)
         
         db.session.commit()
-        
         return jsonify({
             'message': 'Recipe added successfully',
             'recipe_id': new_recipe.id
@@ -509,7 +541,6 @@ def add_recipe():
         db.session.rollback()
         print(f"Error adding recipe: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/menus', methods=['GET'])
 def get_menus():
@@ -800,8 +831,38 @@ def update_fridge_item(item_id):
     
 
 
-    
 
+@app.route('/api/fridge/clear', methods=['POST'])
+def clear_fridge():
+    try:
+        # Set all quantities to 0
+        FridgeItem.query.update({FridgeItem.quantity: 0})
+        db.session.commit()
+        return jsonify({'message': 'All fridge items cleared'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fridge/delete-all', methods=['DELETE'])
+def delete_all_fridge_items():
+    try:
+        FridgeItem.query.delete()
+        db.session.commit()
+        return jsonify({'message': 'All fridge items deleted'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/fridge/clear', methods=['POST'])
+def clear_fridge_items():
+    try:
+        # Update all items to have quantity 0
+        FridgeItem.query.update({FridgeItem.quantity: 0})
+        db.session.commit()
+        return jsonify({'message': 'All fridge quantities cleared'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 
@@ -896,13 +957,26 @@ def delete_recipe(recipe_id):
     try:
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Delete associated ingredients first
+        # Delete associated ingredients in RecipeIngredient3 table
         RecipeIngredient3.query.filter(
             text('JSON_CONTAINS(recipe_ids, CAST(:recipe_id AS JSON))')
         ).params(recipe_id=recipe_id).update(
             {"recipe_ids": text("JSON_REMOVE(recipe_ids, JSON_UNQUOTE(JSON_SEARCH(recipe_ids, 'one', :recipe_id)))")},
             synchronize_session=False
         )
+        
+        # Delete associated records in RecipeIngredientDetails table
+        RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).delete()
+        
+        # Delete associated records in RecipeIngredientQuantity table
+        RecipeIngredientQuantity.query.filter_by(recipe_id=recipe_id).delete()
+        
+        # Delete associated records in RecipeIngredientNutrition table
+        nutrition_subquery = db.session.query(RecipeIngredientNutrition.id).join(RecipeIngredientQuantity).filter(
+            RecipeIngredientQuantity.recipe_id == recipe_id
+        ).subquery()
+
+        RecipeIngredientNutrition.query.filter(RecipeIngredientNutrition.id.in_(nutrition_subquery)).delete(synchronize_session=False)
         
         # Delete the recipe from menus
         MenuRecipe.query.filter_by(recipe_id=recipe_id).delete()
@@ -914,6 +988,7 @@ def delete_recipe(recipe_id):
         return jsonify({'message': 'Recipe deleted successfully'}), 200
     except Exception as e:
         db.session.rollback()
+        print(f"Error deleting recipe: {str(e)}")  # Add this line for logging
         return jsonify({'error': str(e)}), 500
     
 # This should be the ONLY get_grocery_list route in your file
@@ -1300,6 +1375,70 @@ def get_recipe_ingredients(recipe_id):
         return jsonify({'ingredients': ingredients})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/recipe/<int:recipe_id>/ingredients/<int:ingredient_index>/nutrition', methods=['POST'])
+def add_ingredient_nutrition(recipe_id, ingredient_index):
+    try:
+        data = request.json
+        
+        # Get the recipe ingredient quantity record by index
+        quantity_record = RecipeIngredientQuantity.query.filter_by(
+            recipe_id=recipe_id
+        ).offset(ingredient_index).first()
+        
+        if not quantity_record:
+            return jsonify({'error': 'Recipe ingredient not found'}), 404
+
+        # Create nutrition record
+        nutrition = RecipeIngredientNutrition(
+            recipe_ingredient_quantities_id=quantity_record.id,
+            protein_grams=data.get('protein_grams'),
+            fat_grams=data.get('fat_grams'),
+            carbs_grams=data.get('carbs_grams'),
+            serving_size=data.get('serving_size'),
+            serving_unit=data.get('serving_unit')
+        )
+        
+        db.session.add(nutrition)
+        db.session.commit()
+        
+        return jsonify({'message': 'Nutrition info added successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error adding nutrition info: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recipe/<int:recipe_id>/nutrition', methods=['GET'])
+def get_recipe_nutrition(recipe_id):
+    try:
+        with db.engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT * FROM recipe_nutrition_view 
+                WHERE recipe_id = :recipe_id
+            """), {"recipe_id": recipe_id})
+            
+            nutrition_data = []
+            for row in result:
+                nutrition_data.append({
+                    'ingredient_name': row.ingredient_name,
+                    'quantity': float(row.quantity),
+                    'unit': row.unit,
+                    'nutrition': {
+                        'protein_grams': float(row.protein_grams) if row.protein_grams else 0,
+                        'fat_grams': float(row.fat_grams) if row.fat_grams else 0,
+                        'carbs_grams': float(row.carbs_grams) if row.carbs_grams else 0,
+                        'serving_size': float(row.serving_size) if row.serving_size else 0,
+                        'serving_unit': row.serving_unit
+                    }
+                })
+            
+            return jsonify({'nutrition_data': nutrition_data})
+    except Exception as e:
+        print(f"Error getting nutrition info: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+
 
      
 def upgrade_database():
@@ -1321,6 +1460,7 @@ def upgrade_database():
     for command in upgrade_commands:
         conn.execute(text(command))
     conn.close()
+
      
 if __name__ == '__main__':
    with app.app_context():

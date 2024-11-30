@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import NutritionModal from '@/components/NutritionModal';
 
 export default function RecipePage() {
   const router = useRouter();
@@ -17,6 +18,54 @@ export default function RecipePage() {
   const [showGroceryListModal, setShowGroceryListModal] = useState(false);
   const [fridgeItems, setFridgeItems] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNutritionModalOpen, setIsNutritionModalOpen] = useState(false);
+  const [selectedIngredient, setSelectedIngredient] = useState(null);
+
+  const NutritionInfo = ({ nutrition }) => {
+    if (!nutrition) return null;
+    return (
+      <div className="text-sm text-gray-500 ml-6">
+        <span>Protein: {nutrition.protein_grams}g • </span>
+        <span>Fat: {nutrition.fat_grams}g • </span>
+        <span>Carbs: {nutrition.carbs_grams}g • </span>
+        <span>Serving: {nutrition.serving_size} {nutrition.serving_unit}</span>
+      </div>
+    );
+  };
+  
+  // Add nutrition handling functions
+  const handleAddNutrition = (index) => {
+    setSelectedIngredient(index);
+    setIsNutritionModalOpen(true);
+  };
+  
+  const handleNutritionSubmit = async (nutritionData) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/recipe/${id}/ingredients/${nutritionData.ingredientIndex}/nutrition`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          protein_grams: nutritionData.protein_grams,
+          fat_grams: nutritionData.fat_grams,
+          carbs_grams: nutritionData.carbs_grams,
+          serving_size: nutritionData.serving_size,
+          serving_unit: nutritionData.serving_unit
+        })
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to save nutrition data');
+      }
+  
+      // Refresh recipe data
+      await fetchRecipe();
+      setIsNutritionModalOpen(false);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const fetchRecipe = async () => {
     try {
@@ -343,15 +392,30 @@ export default function RecipePage() {
           </div>
           <p className="mb-6 text-gray-600">{recipe.description}</p>
           <div className="mb-6">
-            <h2 className="mb-2 text-xl font-semibold">Ingredients</h2>
-            <ul className="list-inside list-disc">
-              {recipe.ingredients.map((ingredient, index) => (
-                <li key={index} className="text-gray-600">
-                  {ingredient.quantity} {ingredient.unit} {ingredient.name}
-                </li>
-              ))}
-            </ul>
+  <h2 className="mb-2 text-xl font-semibold">Ingredients</h2>
+  <ul className="list-inside space-y-2">
+    {recipe.ingredients.map((ingredient, index) => (
+      <li key={index} className="text-gray-600">
+        <div className="flex items-center justify-between">
+          <div>
+            <span>{ingredient.quantity} {ingredient.unit} {ingredient.name}</span>
+            {ingredient.nutrition && <NutritionInfo nutrition={ingredient.nutrition} />}
           </div>
+          <button
+            onClick={() => handleAddNutrition(index)}
+            className={`px-3 py-1 rounded-md ${
+              ingredient.nutrition 
+                ? 'bg-green-500 text-white hover:bg-green-600' 
+                : 'bg-green-100 text-green-700 hover:bg-green-200'
+            }`}
+          >
+            {ingredient.nutrition ? 'Edit Nutrition' : 'Add Nutrition'}
+          </button>
+        </div>
+      </li>
+    ))}
+  </ul>
+</div>
           <div className="mb-6">
             <h2 className="mb-2 text-xl font-semibold">Instructions</h2>
             <p className="whitespace-pre-line text-gray-600">{recipe.instructions}</p>
@@ -388,6 +452,14 @@ export default function RecipePage() {
           </div>
         </div>
       )}
+      <NutritionModal
+  isOpen={isNutritionModalOpen}
+  onClose={() => setIsNutritionModalOpen(false)}
+  onSubmit={handleNutritionSubmit}
+  ingredientName={selectedIngredient !== null ? recipe.ingredients[selectedIngredient].name : ''}
+  ingredientIndex={selectedIngredient}
+  currentNutrition={selectedIngredient !== null ? recipe.ingredients[selectedIngredient].nutrition : null}
+/>
     </div>
   );
 }

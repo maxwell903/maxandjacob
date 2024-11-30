@@ -1,5 +1,4 @@
 // Location: C:\Users\maxwa\Groshme\src\pages\add-recipe.js
-
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -12,10 +11,50 @@ const AddRecipe = () => {
     description: '',
     instructions: '',
     prep_time: '',
-    ingredients: [{ name: '', quantity: '', unit: '' }]
+    ingredients: [{ 
+      name: '', 
+      quantity: '', 
+      unit: ''
+    }]
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/recipe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: recipe.name,
+          description: recipe.description,
+          instructions: recipe.instructions,
+          prep_time: recipe.prep_time,
+          ingredients: recipe.ingredients.map(ingredient => ({
+            name: ingredient.name,
+            quantity: parseFloat(ingredient.quantity),
+            unit: ingredient.unit
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add recipe');
+      }
+
+      router.push('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleIngredientChange = (index, field, value) => {
     const newIngredients = [...recipe.ingredients];
@@ -29,39 +68,17 @@ const AddRecipe = () => {
   const addIngredientField = () => {
     setRecipe({
       ...recipe,
-      ingredients: [...recipe.ingredients, { name: '', quantity: '', unit: '' }]
+      ingredients: [...recipe.ingredients, { 
+        name: '', 
+        quantity: '', 
+        unit: ''
+      }]
     });
   };
 
   const removeIngredientField = (index) => {
     const newIngredients = recipe.ingredients.filter((_, i) => i !== index);
     setRecipe({ ...recipe, ingredients: newIngredients });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('http://localhost:5000/api/recipe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(recipe),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add recipe');
-      }
-
-      router.push('/');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   useEffect(() => {
@@ -149,7 +166,7 @@ const AddRecipe = () => {
             <label className="block text-sm font-medium text-gray-700">Ingredients</label>
             <div className="space-y-2">
               {recipe.ingredients.map((ingredient, index) => (
-                <div key={index} className="flex gap-2">
+                <div key={index} className="flex gap-2 items-center">
                   <div className="flex-1">
                     <input
                       type="text"
@@ -181,6 +198,7 @@ const AddRecipe = () => {
                       placeholder="Unit"
                     />
                   </div>
+                  
                   {recipe.ingredients.length > 1 && (
                     <button
                       type="button"

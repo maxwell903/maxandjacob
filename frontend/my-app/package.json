@@ -1,12 +1,20 @@
 {
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lodash": "^4.17.21",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@shadcn/ui": "^0.0.4",
     "autoprefixer": "^10.4.20",
     "install": "^0.13.0",
     "npm": "^10.9.0",
