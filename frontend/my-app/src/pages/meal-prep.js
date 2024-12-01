@@ -172,6 +172,11 @@ const MenuSelector = ({ isOpen, onClose, weekId, onMealsAdded }) => {
 
       onMealsAdded();
       onClose();
+      setStep('day');
+     setSelectedDay(null);
+     setSelectedMenu(null);
+     setRecipes([]);
+     setSelectedMeals(new Map());
     } catch (error) {
       console.error('Error adding meals:', error);
     } finally {
@@ -239,7 +244,7 @@ const MenuSelector = ({ isOpen, onClose, weekId, onMealsAdded }) => {
                         <label key={mealType} className="flex items-center space-x-2">
                           <input
                             type="checkbox"
-                            checked={selectedMeals.get(recipe.id)?.has(mealType) || false}
+                            checked={selectedMeals.get(recipe.id)?.has(mealType)}
                             onChange={() => handleMealTypeToggle(recipe.id, mealType)}
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
@@ -432,9 +437,9 @@ const MealDisplay = ({ meal, onDelete }) => {
   
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-96">
+        <div className="bg-white rounded-lg p-6 w-70">
           <h2 className="text-xl font-semibold mb-4">Select Starting Day</h2>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-96 overflow-y-auto">
             {days.map((day) => (
               <button
                 key={day}
@@ -451,7 +456,7 @@ const MealDisplay = ({ meal, onDelete }) => {
           <div className="mt-4 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              className="px-6 py-3 text-gray-600 hover:text-gray-800"
             >
               Cancel
             </button>
