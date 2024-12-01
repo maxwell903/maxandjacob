@@ -26,6 +26,23 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+
+class MealPrepWeek(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    start_day = db.Column(db.String(20), nullable=False)
+    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+    meal_plans = db.relationship('MealPlan', backref='week', cascade='all, delete-orphan')
+
+class MealPlan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    week_id = db.Column(db.Integer, db.ForeignKey('meal_prep_week.id'), nullable=False)
+    day = db.Column(db.String(20), nullable=False)
+    meal_type = db.Column(db.String(20), nullable=False)  # breakfast, lunch, or dinner
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id'), nullable=False)
+    recipe = db.relationship('Recipe')
+
+
+
 class Recipe(db.Model):
    id = db.Column(db.Integer, primary_key=True)
    name = db.Column(db.String(100), nullable=False)
@@ -295,6 +312,108 @@ class ReceiptParser:
             'unmatched_items': unmatched_items,
             'subtotal': subtotal
         }
+    
+@app.route('/api/meal-prep/weeks', methods=['GET'])
+def get_meal_prep_weeks():
+     try:
+         weeks = MealPrepWeek.query.order_by(MealPrepWeek.created_date.desc()).all()
+         weeks_data = []
+         
+         for week in weeks:
+             meal_plans = {}
+             for plan in week.meal_plans:
+                 if plan.day not in meal_plans:
+                     meal_plans[plan.day] = {}
+                 meal_plans[plan.day][plan.meal_type] = {
+                     'recipe_id': plan.recipe_id,
+                     'recipe_name': plan.recipe.name,
+                     'prep_time': plan.recipe.prep_time,
+                     'total_nutrition': {
+                         'protein_grams': sum(
+                             (ing.nutrition.protein_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                             for ing in plan.recipe.ingredient_quantities 
+                             if ing.nutrition and ing.nutrition.serving_size
+                         ),
+                         'fat_grams': sum(
+                             (ing.nutrition.fat_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                             for ing in plan.recipe.ingredient_quantities 
+                             if ing.nutrition and ing.nutrition.serving_size
+                         ),
+                         'carbs_grams': sum(
+                             (ing.nutrition.carbs_grams or 0) * (ing.quantity / ing.nutrition.serving_size)
+                             for ing in plan.recipe.ingredient_quantities 
+                             if ing.nutrition and ing.nutrition.serving_size
+                         )
+                     }
+                 }
+             
+             weeks_data.append({
+                 'id': week.id,
+                 'start_day': week.start_day,
+                 'created_date': week.created_date.strftime('%Y-%m-%d'),
+                 'meal_plans': meal_plans
+             })
+         
+         return jsonify({'weeks': weeks_data})
+     except Exception as e:
+         print(f"Error fetching meal prep weeks: {str(e)}")
+         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/meal-prep/weeks', methods=['POST'])
+def create_meal_prep_week():
+     try:
+         data = request.json
+         new_week = MealPrepWeek(start_day=data['start_day'])
+         db.session.add(new_week)
+         db.session.commit()
+         return jsonify({
+             'id': new_week.id,
+             'start_day': new_week.start_day,
+             'created_date': new_week.created_date.strftime('%Y-%m-%d')
+         }), 201
+     except Exception as e:
+         db.session.rollback()
+         return jsonify({'error': str(e)}), 500
+@app.route('/api/meal-prep/weeks/<int:week_id>/meals', methods=['POST'])
+def add_meal_to_week(week_id):
+     try:
+         data = request.json
+         meal_plan = MealPlan(
+             week_id=week_id,
+             day=data['day'],
+             meal_type=data['meal_type'],
+             recipe_id=data['recipe_id']
+         )
+         db.session.add(meal_plan)
+         db.session.commit()
+         return jsonify({'message': 'Meal added successfully'}), 201
+     except Exception as e:
+         db.session.rollback()
+         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/meal-prep/weeks/<int:week_id>/meals/<int:meal_id>', methods=['DELETE'])
+def delete_meal_from_week(week_id, meal_id):
+     try:
+         meal = MealPlan.query.get_or_404(meal_id)
+         if meal.week_id != week_id:
+             return jsonify({'error': 'Meal not found in specified week'}), 404
+         db.session.delete(meal)
+         db.session.commit()
+         return jsonify({'message': 'Meal deleted successfully'}), 200
+     except Exception as e:
+         db.session.rollback()
+         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/meal-prep/weeks/<int:week_id>', methods=['DELETE'])
+def delete_meal_prep_week(week_id):
+     try:
+         week = MealPrepWeek.query.get_or_404(week_id)
+         db.session.delete(week)
+         db.session.commit()
+         return jsonify({'message': 'Week deleted successfully'}), 200
+     except Exception as e:
+         db.session.rollback()
+         return jsonify({'error': str(e)}), 500
     
 @app.route('/api/grocery-bill/parse-receipt', methods=['POST'])
 def parse_grocery_receipt():

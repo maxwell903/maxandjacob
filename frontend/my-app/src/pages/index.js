@@ -56,7 +56,7 @@ export default function Home() {
               Total Recipes: {homeData.total_recipes}
             </p>
             
-            <div className="flex justify-center gap-4">
+            
               <Link 
                 href="/search"
                 className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
@@ -102,6 +102,14 @@ export default function Home() {
                 My Menus
               </Link>
 
+               <Link 
+   href="/meal-prep"
+   className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
+   onClick={() => localStorage.setItem('previousPath', '/')}
+ >
+   Meal Prep
+ </Link>
+
               <Link 
                 href="/grocery-bill"
                 className="inline-block rounded-lg bg-yellow-600 px-6 py-3 text-white hover:bg-yellow-700 transition-colors duration-200"
@@ -109,7 +117,7 @@ export default function Home() {
               >
                 Grocery Bill
               </Link>
-            </div>
+           
 
             {error && (
               <div className="mb-8 rounded-lg bg-green-100 p-4 text-red-700">
