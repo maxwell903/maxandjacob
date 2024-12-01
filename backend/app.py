@@ -1482,26 +1482,36 @@ def add_recipe_ingredient_details():
 @app.route('/api/recipe/<int:recipe_id>/ingredients', methods=['GET'])
 def get_recipe_ingredients(recipe_id):
     try:
-        cursor = db.cursor()
-        cursor.execute(
-            """
-            SELECT ri.ingredient_name, ri.quantity, ri.unit
-            FROM recipe_ingredient_details ri
-            WHERE ri.recipe_id = %s
-            """,
-            (recipe_id,)
-        )
-        ingredients = [
-            {
-                'name': row[0],
-                'quantity': float(row[1]),
-                'unit': row[2]
-            }
-            for row in cursor.fetchall()
-        ]
-        return jsonify({'ingredients': ingredients})
+        # Query to get ingredients with quantities and units
+        ingredients_query = db.session.query(
+            RecipeIngredientQuantity,
+            Ingredient
+        ).join(
+            Ingredient,
+            RecipeIngredientQuantity.ingredient_id == Ingredient.id
+        ).filter(
+            RecipeIngredientQuantity.recipe_id == recipe_id
+        ).all()
+
+        # Format the ingredients data
+        ingredients = [{
+            'name': ingredient.name,
+            'quantity': float(quantity.quantity) if quantity.quantity else 0,
+            'unit': quantity.unit or '',
+            'ingredient_id': ingredient.id
+        } for quantity, ingredient in ingredients_query]
+
+        return jsonify({
+            'success': True,
+            'ingredients': ingredients
+        })
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error fetching recipe ingredients: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch recipe ingredients'
+        }), 500
     
 @app.route('/api/recipe/<int:recipe_id>/ingredients/<int:ingredient_index>/nutrition', methods=['POST'])
 def add_ingredient_nutrition(recipe_id, ingredient_index):

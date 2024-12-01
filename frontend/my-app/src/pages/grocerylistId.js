@@ -267,6 +267,21 @@ export default function GroceryListsPage() {
   const [error, setError] = useState(null);
   const [newItemName, setNewItemName] = useState('');
   const router = useRouter();
+  const [fridgeItems, setFridgeItems] = useState([]);
+
+  const fetchFridgeItems = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/fridge');
+      if (!response.ok) {
+        throw new Error('Failed to fetch fridge items');
+      }
+      const data = await response.json();
+      setFridgeItems(data.ingredients || []);
+    } catch (error) {
+      console.error('Error fetching fridge items:', error);
+      setError('Failed to fetch fridge items');
+    }
+  };
 
   // Fetch all lists and their items
   const fetchData = async () => {
@@ -283,7 +298,22 @@ export default function GroceryListsPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        await Promise.all([
+          fetchData(),
+          fetchFridgeItems()
+        ]);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        setError('Failed to fetch data');
+      } finally {
+        setLoading(false);
+      }
+    };
+  
+    fetchInitialData();
   }, []);
 
   // Handlers for various actions
@@ -407,21 +437,48 @@ export default function GroceryListsPage() {
       setError(error.message || 'Failed to delete item');
     }
   };
+
+  const fetchRecipeIngredientDetails = async (recipeId) => {
+    const response = await fetch(`http://localhost:5000/api/recipe/${recipeId}/ingredients`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch recipe ingredient details');
+    }
+    return await response.json();
+  };
   
 
   const handleAddFromRecipe = async (recipe) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/add-recipe/${recipe.id}`, {
+      // First add the recipe name as header
+      await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({ name: `**${recipe.name}**` }),
       });
   
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add recipe items');
+      // Fetch detailed recipe ingredients including quantities
+      const ingredients = await fetchRecipeIngredientDetails(recipe.id);
+      
+      // Add each ingredient with its quantity and unit
+      for (const ingredient of ingredients.ingredients) {
+        const inFridge = fridgeItems.some(item => 
+          item.name.toLowerCase() === ingredient.name.toLowerCase() && 
+          item.quantity > 0
+        );
+        
+        await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', 
+          },
+          body: JSON.stringify({
+            name: `${inFridge ? '✓' : '•'} ${ingredient.name}`,
+            quantity: ingredient.quantity,
+            unit: ingredient.unit
+          }),
+        });
       }
   
       setSelectedRecipe(false);
@@ -431,21 +488,58 @@ export default function GroceryListsPage() {
       console.error('Error adding recipe:', err);
     }
   };
-  
-  // Update the handleAddFromMenu function
+ 
   const handleAddFromMenu = async (menuId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/add-menu/${menuId}`, {
+      // Fetch all menu recipes with ingredient details
+      const response = await fetch(`http://localhost:5000/api/menus/${menuId}/recipes`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch menu recipes');
+      }
+      
+      const menuData = await response.json();
+      
+      // Add menu name as header
+      await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+        },
+        body: JSON.stringify({ name: `### ${menuData.menu_name} ###` }),
       });
   
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add menu items');
+      // Process each recipe
+      for (const recipe of menuData.recipes) {
+        // Add recipe name
+        await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: `**${recipe.name}**` }),
+        });
+  
+        // Fetch and add recipe ingredients
+        const ingredients = await fetchRecipeIngredientDetails(recipe.id);
+        
+        for (const ingredient of ingredients.ingredients) {
+          const inFridge = fridgeItems.some(item => 
+            item.name.toLowerCase() === ingredient.name.toLowerCase() && 
+            item.quantity > 0
+          );
+  
+          await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/items`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: `${inFridge ? '✓' : '•'} ${ingredient.name}`,
+              quantity: ingredient.quantity,
+              unit: ingredient.unit
+            }),
+          });
+        }
       }
   
       setSelectedMenu(false);
