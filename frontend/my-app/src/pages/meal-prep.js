@@ -593,7 +593,7 @@ const MealDisplay = ({ meal, onDelete }) => {
                     href="/exercise-form"
                     className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                   >
-                    My Exercises
+                    Add Exercises
                   </Link>
                 </div>
                 <ExerciseDisplay />
