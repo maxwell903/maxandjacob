@@ -202,7 +202,7 @@ const MenuSelector = ({ isOpen, onClose, weekId, onMealsAdded }) => {
 
         {step === 'day' && (
           <div className="space-y-2">
-            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
               <button
                 key={day}
                 onClick={() => {
@@ -447,7 +447,7 @@ const MealDisplay = ({ meal, onDelete }) => {
                   onDaySelect(day);
                   onClose();
                 }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-md"
+                className="w-full text-left px-6 py-3 hover:bg-gray-100 rounded-md"
               >
                 {day}
               </button>
