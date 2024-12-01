@@ -132,23 +132,34 @@ def add_exercise_sets(exercise_id):
 @app.route('/api/exercise/<int:exercise_id>/sets/history', methods=['GET'])
 def get_exercise_history(exercise_id):
     try:
+        # Get all history records for this exercise
         histories = SetHistory.query\
             .filter_by(exercise_id=exercise_id)\
             .order_by(SetHistory.created_at.desc())\
             .all()
         
-        return jsonify({
-            'history': [{
+        # Prepare the response data
+        history_data = []
+        for history in histories:
+            # Get all sets for this history record
+            sets = IndividualSet.query\
+                .filter_by(set_history_id=history.id)\
+                .order_by(IndividualSet.set_number)\
+                .all()
+            
+            history_data.append({
                 'id': history.id,
                 'created_at': history.created_at.isoformat(),
                 'sets': [{
                     'set_number': set.set_number,
                     'reps': set.reps,
                     'weight': set.weight
-                } for set in sorted(history.individual_sets, key=lambda x: x.set_number)]
-            } for history in histories]
-        })
+                } for set in sets]
+            })
+        
+        return jsonify({'history': history_data})
     except Exception as e:
+        print(f"Error fetching exercise history: {str(e)}")  # Add debug logging
         return jsonify({'error': str(e)}), 500
 
 
