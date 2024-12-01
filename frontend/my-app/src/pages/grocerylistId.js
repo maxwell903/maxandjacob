@@ -586,16 +586,44 @@ export default function GroceryListsPage() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Grocery Lists</h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-          >
-            <Plus size={20} />
-            New List
-          </button>
-        </div>
+      <div className="flex justify-between items-center mb-8">
+  <h1 className="text-3xl font-bold text-gray-900">Grocery Lists</h1>
+  <div className="flex gap-2">
+    <button
+      onClick={async () => {
+        if (expandedList) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/grocery-lists/${expandedList}/condense`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to condense list');
+            }
+
+            // Refresh the list data
+            await fetchData();
+            
+          } catch (error) {
+            console.error('Error condensing list:', error);
+            setError('Failed to condense list');
+          }
+        }
+      }}
+      className="flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700"
+    >
+      Condense List
+    </button>
+    <button
+      onClick={() => setShowForm(!showForm)}
+      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+    >
+      <Plus size={20} />
+      New List
+    </button>
+  </div>
+</div>
 
         {showForm && (
           <div className="mb-8 bg-white rounded-lg shadow-lg p-6">

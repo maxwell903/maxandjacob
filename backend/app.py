@@ -1227,140 +1227,218 @@ class GroceryItem(db.Model):
             'total': float(self.total) if self.total is not None else 0
         }
 
-# Update the add_recipe_to_grocery_list function:
+def merge_grocery_items(list_id, items_to_add):
+    """
+    Helper function to merge grocery items with existing ones
+    Returns list of items after merging
+    """
+    existing_items = GroceryItem.query.filter_by(list_id=list_id).all()
+    merged_items = []
+    
+    for item in items_to_add:
+        # Clean names for comparison by removing prefixes
+        clean_name = item['name'].replace('✓ ', '').replace('• ', '')
+        if clean_name.startswith('**') or clean_name.startswith('###'):
+            # Don't duplicate headers - just add if not exists
+            existing_header = next(
+                (x for x in existing_items if x.name == item['name']), 
+                None
+            )
+            if not existing_header:
+                merged_items.append(item)
+            continue
+            
+        # Look for matching ingredient (same name and unit)
+        existing_item = next(
+            (x for x in existing_items 
+             if x.name.replace('✓ ', '').replace('• ', '') == clean_name
+             and x.unit == item['unit']),
+            None
+        )
+        
+        if existing_item:
+            # Update existing item
+            existing_item.quantity += item['quantity']
+            existing_item.total = existing_item.quantity * existing_item.price_per
+            existing_item.name = item['name']  # Update check/bullet status
+        else:
+            # Add as new item
+            merged_items.append(item)
+            
+    return merged_items
+
+
 @app.route('/api/grocery-lists/<int:list_id>/add-recipe/<int:recipe_id>', methods=['POST'])
 def add_recipe_to_grocery_list(list_id, recipe_id):
     try:
         recipe = Recipe.query.get_or_404(recipe_id)
         
-        # Get recipe ingredients from recipe_ingredient_details table
-        ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).all()
+        # Prepare items to add
+        items_to_add = []
         
-        # First add recipe name as header
-        grocery_item = GroceryItem(
-            name=f"**{recipe.name}**",
-            list_id=list_id,
-            quantity=0,
-            unit='',
-            price_per=0,
-            total=0
-        )
-        db.session.add(grocery_item)
+        # Add recipe header
+        items_to_add.append({
+            'name': f"**{recipe.name}**",
+            'quantity': 0,
+            'unit': '',
+            'price_per': 0,
+            'total': 0
+        })
         
-        # Get current fridge items for comparison
+        # Get recipe ingredients
+        ingredients = RecipeIngredientDetails.query.filter_by(recipe_id=recipe_id).all()
         fridge_items = FridgeItem.query.all()
         
-        # Add each ingredient
-        for detail in ingredient_details:
-            # Check if ingredient exists in fridge with quantity > 0
-            fridge_item = next(
-                (item for item in fridge_items 
-                 if item.name.lower() == detail.ingredient_name.lower() and item.quantity > 0),
-                None
+        # Prepare ingredient items
+        for ingredient in ingredients:
+            inFridge = any(
+                item.name.lower() == ingredient.ingredient_name.lower() and 
+                item.quantity > 0 
+                for item in fridge_items
             )
             
+            items_to_add.append({
+                'name': f"{'✓' if inFridge else '•'} {ingredient.ingredient_name}",
+                'quantity': ingredient.quantity,
+                'unit': ingredient.unit,
+                'price_per': 0,
+                'total': 0
+            })
+        
+        # Merge with existing items
+        merged_items = merge_grocery_items(list_id, items_to_add)
+        
+        # Add new items to database
+        for item in merged_items:
             grocery_item = GroceryItem(
-                name=f"• {detail.ingredient_name}" if not fridge_item else f"✓ {detail.ingredient_name}",
                 list_id=list_id,
-                quantity=detail.quantity,
-                unit=detail.unit,
-                price_per=0,
-                total=0
+                **item
             )
             db.session.add(grocery_item)
-
-            # Ensure ingredient exists in fridge system
-            if not any(item.name.lower() == detail.ingredient_name.lower() for item in fridge_items):
-                new_fridge_item = FridgeItem(
-                    name=detail.ingredient_name,
-                    quantity=0,
-                    unit=detail.unit
-                )
-                db.session.add(new_fridge_item)
         
         db.session.commit()
-        return jsonify({'message': 'Recipe added to grocery list'}), 201
+        return jsonify({'message': 'Recipe added successfully'}), 201
         
     except Exception as e:
         db.session.rollback()
+        print(f"Error adding recipe: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/grocery-lists/<int:list_id>/add-menu/<int:menu_id>', methods=['POST'])
 def add_menu_to_grocery_list(list_id, menu_id):
     try:
         menu = Menu.query.get_or_404(menu_id)
+        items_to_add = []
+        
+        # Add menu header
+        items_to_add.append({
+            'name': f"### {menu.name} ###",
+            'quantity': 0,
+            'unit': '',
+            'price_per': 0,
+            'total': 0
+        })
+        
+        # Get all recipes in menu
         menu_recipes = MenuRecipe.query.filter_by(menu_id=menu_id).all()
-        
-        # Add menu name as header
-        grocery_item = GroceryItem(
-            name=f"### {menu.name} ###",
-            list_id=list_id,
-            quantity=0,
-            unit='',
-            price_per=0,
-            total=0
-        )
-        db.session.add(grocery_item)
-        
-        # Get current fridge items for comparison
         fridge_items = FridgeItem.query.all()
         
-        # Process each recipe in the menu
         for menu_recipe in menu_recipes:
             recipe = Recipe.query.get(menu_recipe.recipe_id)
             if not recipe:
                 continue
                 
-            # Add recipe name as subheader
-            recipe_header = GroceryItem(
-                name=f"**{recipe.name}**",
-                list_id=list_id,
-                quantity=0,
-                unit='',
-                price_per=0,
-                total=0
-            )
-            db.session.add(recipe_header)
+            # Add recipe header
+            items_to_add.append({
+                'name': f"**{recipe.name}**",
+                'quantity': 0,
+                'unit': '',
+                'price_per': 0,
+                'total': 0
+            })
             
-            # Get recipe ingredients from recipe_ingredient_details table
-            ingredient_details = RecipeIngredientDetails.query.filter_by(recipe_id=recipe.id).all()
+            # Get recipe ingredients
+            ingredients = RecipeIngredientDetails.query.filter_by(recipe_id=recipe.id).all()
             
-            # Add each ingredient
-            for detail in ingredient_details:
-                # Check if ingredient exists in fridge with quantity > 0
-                fridge_item = next(
-                    (item for item in fridge_items 
-                     if item.name.lower() == detail.ingredient_name.lower() and item.quantity > 0),
-                    None
+            # Add ingredients
+            for ingredient in ingredients:
+                inFridge = any(
+                    item.name.lower() == ingredient.ingredient_name.lower() and 
+                    item.quantity > 0 
+                    for item in fridge_items
                 )
                 
-                grocery_item = GroceryItem(
-                    name=f"• {detail.ingredient_name}" if not fridge_item else f"✓ {detail.ingredient_name}",
-                    list_id=list_id,
-                    quantity=detail.quantity,
-                    unit=detail.unit,
-                    price_per=0,
-                    total=0
-                )
-                db.session.add(grocery_item)
-
-                # Ensure ingredient exists in fridge system
-                if not any(item.name.lower() == detail.ingredient_name.lower() for item in fridge_items):
-                    new_fridge_item = FridgeItem(
-                        name=detail.ingredient_name,
-                        quantity=0,
-                        unit=detail.unit  
-                    )
-                    db.session.add(new_fridge_item)
+                items_to_add.append({
+                    'name': f"{'✓' if inFridge else '•'} {ingredient.ingredient_name}",
+                    'quantity': ingredient.quantity,
+                    'unit': ingredient.unit,
+                    'price_per': 0,
+                    'total': 0
+                })
+        
+        # Merge with existing items
+        merged_items = merge_grocery_items(list_id, items_to_add)
+        
+        # Add new items to database
+        for item in merged_items:
+            grocery_item = GroceryItem(
+                list_id=list_id,
+                **item
+            )
+            db.session.add(grocery_item)
         
         db.session.commit()
-        return jsonify({'message': 'Menu added to grocery list successfully'}), 201
+        return jsonify({'message': 'Menu added successfully'}), 201
         
     except Exception as e:
         db.session.rollback()
+        print(f"Error adding menu: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Also update the add_item_to_list function:
+ 
+@app.route('/api/grocery-lists/<int:list_id>/condense', methods=['POST'])
+def condense_grocery_list(list_id):
+    try:
+        # Get all items in the list
+        items = GroceryItem.query.filter_by(list_id=list_id).all()
+        
+        # Create a dictionary to track processed items
+        processed_items = {}
+        items_to_delete = []
+        
+        for item in items:
+            # Skip headers (items starting with ** or ###)
+            if item.name.startswith('**') or item.name.startswith('###'):
+                continue
+                
+            # Clean the item name for comparison
+            clean_name = item.name.replace('✓ ', '').replace('• ', '').lower()
+            
+            # Create a key combining name and unit for matching
+            key = f"{clean_name}|{item.unit}"
+            
+            if key in processed_items:
+                # Add quantity to existing item
+                destination_item = processed_items[key]
+                destination_item.quantity += item.quantity
+                destination_item.total = destination_item.quantity * destination_item.price_per
+                items_to_delete.append(item)
+            else:
+                processed_items[key] = item
+        
+        # Delete the merged items
+        for item in items_to_delete:
+            db.session.delete(item)
+            
+        db.session.commit()
+        return jsonify({'message': 'List condensed successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error condensing list: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/grocery-lists/<int:list_id>/items', methods=['POST'])
 def add_item_to_list(list_id):
     try:
