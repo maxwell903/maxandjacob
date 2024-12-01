@@ -12,29 +12,39 @@ const ExerciseForm = () => {
     rest_time: ''
   });
 
-  const handleSubmit = async (e) => {
+  // In ExerciseForm.js, modify the handleSubmit function:
+const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
+      // Format the data before sending
+      const formattedData = {
+        name: formData.name,
+        workout_type: formData.workout_type,
+        major_groups: formData.major_groups.split(',').map(g => g.trim()),
+        minor_groups: formData.minor_groups.split(',').map(g => g.trim()),
+        amount_sets: parseInt(formData.amount_sets) || 0,
+        amount_reps: parseInt(formData.amount_reps) || 0,
+        weight: parseFloat(formData.weight) || 0,
+        rest_time: parseInt(formData.rest_time) || 0
+      };
+  
+      console.log('Sending exercise data:', formattedData); // Add this line
+  
       const response = await fetch('http://localhost:5000/api/exercise', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          major_groups: formData.major_groups.split(',').map(g => g.trim()),
-          minor_groups: formData.minor_groups.split(',').map(g => g.trim()),
-          amount_sets: parseInt(formData.amount_sets),
-          rest_time: parseInt(formData.rest_time)
-        })
+        body: JSON.stringify(formattedData)
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save exercise');
       }
+      // ...rest of the function
       
       const data = await response.json();
       

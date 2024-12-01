@@ -468,10 +468,18 @@ const MealDisplay = ({ meal, onDelete }) => {
   };
   
   const MealPrepPage = () => {
-    const [viewMode, setViewMode] = useState('menus');
+    const [viewMode, setViewMode] = useState(() => {
+      // Get the last selected tab from localStorage, default to 'mealprep' if none exists
+      return localStorage.getItem('lastMealPrepTab') || 'mealprep';
+    });
     const [showDaySelector, setShowDaySelector] = useState(false);
     const [weeks, setWeeks] = useState([]);
     const [loading, setLoading] = useState(true);
+  
+    // Update localStorage whenever viewMode changes
+    useEffect(() => {
+      localStorage.setItem('lastMealPrepTab', viewMode);
+    }, [viewMode]);
   
     const fetchWeeks = async () => {
       try {
@@ -556,16 +564,6 @@ const MealDisplay = ({ meal, onDelete }) => {
           <div className="mb-8">
             <div className="flex gap-4 mb-6">
               <button
-                onClick={() => setViewMode('menus')}
-                className={`px-4 py-2 rounded-lg ${
-                  viewMode === 'menus'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                My Menus
-              </button>
-              <button
                 onClick={() => setViewMode('mealprep')}
                 className={`px-4 py-2 rounded-lg ${
                   viewMode === 'mealprep'
@@ -583,25 +581,26 @@ const MealDisplay = ({ meal, onDelete }) => {
                     : 'bg-gray-200 text-gray-700'
                 }`}
               >
-                My Workout
+                My Exercises
               </button>
             </div>
-            {viewMode === 'workout' && (
-                <div>
-  <div className="flex justify-between items-center mb-6">
-    <h1 className="text-3xl font-bold text-gray-900">My Workout</h1>
-    <Link
-      href="/exercise-form"
-      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-    >
-      My Exercises
-    </Link>
-  </div>
-  <ExerciseDisplay />
-  </div>
-)}
   
-            {viewMode === 'mealprep' ? (
+            {viewMode === 'workout' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h1 className="text-3xl font-bold text-gray-900">My Exercises</h1>
+                  <Link
+                    href="/exercise-form"
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  >
+                    My Exercises
+                  </Link>
+                </div>
+                <ExerciseDisplay />
+              </div>
+            )}
+  
+            {viewMode === 'mealprep' && (
               <>
                 <div className="flex justify-between items-center mb-6">
                   <h1 className="text-3xl font-bold text-gray-900">My Meal Prep</h1>
@@ -630,14 +629,7 @@ const MealDisplay = ({ meal, onDelete }) => {
                   </div>
                 )}
               </>
-            ) : (
-              <iframe
-                src="/menus"
-                className="w-full h-screen border-none"
-                style={{ height: 'calc(100vh - 200px)' }}
-              />
             )}
-
           </div>
   
           <DaySelector
@@ -646,14 +638,9 @@ const MealDisplay = ({ meal, onDelete }) => {
             onDaySelect={handleDaySelect}
           />
         </div>
-
-        <DaySelector
-            isOpen={showDaySelector}
-            onClose={() => setShowDaySelector(false)}
-            onDaySelect={handleDaySelect}
-        />
       </div>
     );
+  
   };
   
   export default MealPrepPage;

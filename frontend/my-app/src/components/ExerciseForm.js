@@ -17,23 +17,25 @@ const ExerciseForm = () => {
     e.preventDefault();
     
     try {
-      console.log('Submitting exercise data:', formData); // Debug log
-      
+      // Format the data before sending
+      const formattedData = {
+        name: formData.name,
+        workout_type: formData.workout_type,
+        major_groups: formData.major_groups.split(',').map(g => g.trim()),
+        minor_groups: formData.minor_groups.split(',').map(g => g.trim()),
+        amount_sets: parseInt(formData.amount_sets) || 0,
+        amount_reps: parseInt(formData.amount_reps) || 0,
+        weight: parseFloat(formData.weight) || 0,
+        rest_time: parseInt(formData.rest_time) || 0
+      };
+
       const response = await fetch('http://localhost:5000/api/exercise', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          major_groups: formData.major_groups.split(',').map(g => g.trim()),
-          minor_groups: formData.minor_groups.split(',').map(g => g.trim()),
-          amount_sets: parseInt(formData.amount_sets),
-          amount_reps: parseInt(formData.amount_reps),
-          weight: parseFloat(formData.weight),
-          rest_time: parseInt(formData.rest_time)
-        })
+        body: JSON.stringify(formattedData)
       });
 
       if (!response.ok) {
@@ -41,9 +43,7 @@ const ExerciseForm = () => {
         throw new Error(errorData.error || 'Failed to save exercise');
       }
       
-      const data = await response.json();
-      console.log('Server response:', data); // Debug log
-      
+      // Reset form on success
       setFormData({
         name: '',
         workout_type: 'Push',
@@ -150,14 +150,14 @@ const ExerciseForm = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reps
+                Rest Time (seconds)
               </label>
               <input
                 type="number"
                 required
-                min="1"
-                value={formData.amount_reps}
-                onChange={(e) => setFormData(prev => ({ ...prev, amount_reps: e.target.value }))}
+                min="0"
+                value={formData.rest_time}
+                onChange={(e) => setFormData(prev => ({ ...prev, rest_time: e.target.value }))}
                 className="w-full rounded-md border border-gray-300 px-3 py-2"
               />
             </div>
@@ -166,7 +166,7 @@ const ExerciseForm = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Weight (lbs)
+                Max Weight (lbs)
               </label>
               <input
                 type="number"
@@ -181,14 +181,14 @@ const ExerciseForm = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Rest Time (seconds)
+                Reps for Max
               </label>
               <input
                 type="number"
                 required
-                min="0"
-                value={formData.rest_time}
-                onChange={(e) => setFormData(prev => ({ ...prev, rest_time: e.target.value }))}
+                min="1"
+                value={formData.amount_reps}
+                onChange={(e) => setFormData(prev => ({ ...prev, amount_reps: e.target.value }))}
                 className="w-full rounded-md border border-gray-300 px-3 py-2"
               />
             </div>
