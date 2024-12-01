@@ -1279,10 +1279,10 @@ def add_recipe_to_grocery_list(list_id, recipe_id):
         # Add recipe header
         items_to_add.append({
             'name': f"**{recipe.name}**",
-            'quantity': 0,
+            'quantity': 1,
             'unit': '',
             'price_per': 0,
-            'total': 0
+            'total':  ''
         })
         
         # Get recipe ingredients
@@ -1332,8 +1332,8 @@ def add_menu_to_grocery_list(list_id, menu_id):
         
         # Add menu header
         items_to_add.append({
-            'name': f"### {menu.name} ###",
-            'quantity': 0,
+            'name': f"--- {menu.name} ---",
+            'quantity': 1,
             'unit': '',
             'price_per': 0,
             'total': 0
@@ -1350,7 +1350,7 @@ def add_menu_to_grocery_list(list_id, menu_id):
                 
             # Add recipe header
             items_to_add.append({
-                'name': f"**{recipe.name}**",
+                'name': f"{recipe.name}",
                 'quantity': 0,
                 'unit': '',
                 'price_per': 0,
@@ -1404,11 +1404,39 @@ def condense_grocery_list(list_id):
         
         # Create a dictionary to track processed items
         processed_items = {}
+        processed_recipes = {}
+        processed_menus = {}
         items_to_delete = []
         
         for item in items:
-            # Skip headers (items starting with ** or ###)
-            if item.name.startswith('**') or item.name.startswith('###'):
+            # Handle menu headers separately
+            if item.name.startswith('###'):
+                menu_name = item.name.lower()
+                if menu_name in processed_menus:
+                   destination_item = processed_menus[menu_name]
+                   destination_item.quantity = float(destination_item.quantity or 0) + 1
+                   db.session.flush()
+                   items_to_delete.append(item)
+                else:
+                   if not item.quantity or item.quantity == 0:
+                       item.quantity = 1
+                   processed_menus[menu_name] = item
+                continue
+
+                  # Handle recipe names
+            elif item.name.startswith('**'):
+                recipe_name = item.name.lower()
+                if recipe_name in processed_recipes:
+                   # Add quantity (1) to existing recipe header
+                   destination_item = processed_recipes[recipe_name]
+                   destination_item.quantity = float(destination_item.quantity or 0) + 1
+                   db.session.flush()
+                   items_to_delete.append(item)
+                else:
+                   # Set initial quantity to 1 for recipe headers
+                    if not item.quantity or item.quantity == 0:
+                       item.quantity = 1
+                    processed_recipes[recipe_name] = item
                 continue
                 
             # Clean the item name for comparison
