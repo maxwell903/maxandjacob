@@ -76,7 +76,7 @@ const SearchableRecipeSelector = ({ isOpen, onClose, onSelect, mealType }) => {
                 <div className="font-medium">{recipe.name}</div>
                 <div className="text-sm text-gray-600">{recipe.description}</div>
                 <div className="text-sm text-gray-500 mt-1">
-                  Prep time: {recipe.prep_time} mins • 
+                  {recipe.prep_time} mins • 
                   Protein: {recipe.total_nutrition?.protein_grams || 0}g • 
                   Fat: {recipe.total_nutrition?.fat_grams || 0}g • 
                   Carbs: {recipe.total_nutrition?.carbs_grams || 0}g
@@ -285,7 +285,7 @@ const MealDisplay = ({ meal, onDelete }) => {
         </button>
         <h4 className="font-medium">{meal.recipe_name}</h4>
         <p className="text-sm text-gray-500">
-          Prep time: {meal.prep_time} mins
+          {meal.prep_time} mins
         </p>
         <p className="text-xs text-gray-500">
           Protein: {meal.total_nutrition.protein_grams.toFixed(1)}g •
