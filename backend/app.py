@@ -47,6 +47,14 @@ class Exercise(db.Model):
     amount_reps = db.Column(db.Integer, nullable=False)
     weight = db.Column(db.Integer, nullable=False)
     rest_time = db.Column(db.Integer, nullable=False)
+    sets = db.relationship('IndividualSet', backref='exercise', lazy=True, cascade='all, delete-orphan')
+
+class IndividualSet(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    set_number = db.Column(db.Integer, nullable=False)
+    reps = db.Column(db.Integer, nullable=False)
+    weight = db.Column(db.Float, nullable=False)
 
 class WorkoutPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -799,7 +807,45 @@ def get_all_recipes():
         }), 500
 
 
-# In app.py
+@app.route('/api/exercise/<int:exercise_id>/sets', methods=['GET'])
+def get_exercise_sets(exercise_id):
+    try:
+        sets = IndividualSet.query.filter_by(exercise_id=exercise_id).order_by(IndividualSet.set_number).all()
+        return jsonify({
+            'sets': [{
+                'id': s.id,
+                'set_number': s.set_number,
+                'reps': s.reps,
+                'weight': s.weight
+            } for s in sets]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/sets', methods=['POST'])
+def add_exercise_sets(exercise_id):
+    try:
+        data = request.json
+        sets = data.get('sets', [])
+        
+        # First delete existing sets
+        IndividualSet.query.filter_by(exercise_id=exercise_id).delete()
+        
+        # Add new sets
+        for set_data in sets:
+            new_set = IndividualSet(
+                exercise_id=exercise_id,
+                set_number=set_data['set_number'],
+                reps=set_data['reps'],
+                weight=set_data['weight']
+            )
+            db.session.add(new_set)
+            
+        db.session.commit()
+        return jsonify({'message': 'Sets added successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recipe', methods=['POST'])
 def add_recipe():
