@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import SetsModal from './SetsModal';
 
 const ExerciseCard = ({ exercise }) => {
     const [showSetsModal, setShowSetsModal] = useState(false);
+    const router = useRouter();
   
     return (
       <>
@@ -22,12 +24,20 @@ const ExerciseCard = ({ exercise }) => {
           <div className="mt-2 text-sm text-gray-500">
             {exercise.amount_sets} sets • Rest: {exercise.rest_time}s
           </div>
-          <button
-            onClick={() => setShowSetsModal(true)}
-            className="mt-4 w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            Sets
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => setShowSetsModal(true)}
+              className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 text-sm"
+            >
+              Sets
+            </button>
+            <button
+              onClick={() => router.push(`/exercise/${exercise.id}`)}
+              className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm"
+            >
+              History
+            </button>
+          </div>
         </div>
         
         <SetsModal

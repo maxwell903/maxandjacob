@@ -48,13 +48,119 @@ class Exercise(db.Model):
     weight = db.Column(db.Integer, nullable=False)
     rest_time = db.Column(db.Integer, nullable=False)
     sets = db.relationship('IndividualSet', backref='exercise', lazy=True, cascade='all, delete-orphan')
+    set_histories = db.relationship('SetHistory', backref='exercise', lazy=True, cascade='all, delete-orphan')
+
+class SetHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    sets = db.relationship('IndividualSet', backref='history', lazy=True, cascade='all, delete-orphan')
+    
+
+@app.route('/api/exercises/<int:exercise_id>', methods=['GET'])
+def get_exercise(exercise_id):
+    try:
+        exercise = Exercise.query.get_or_404(exercise_id)
+        return jsonify({
+            'id': exercise.id,
+            'name': exercise.name,
+            'workout_type': exercise.workout_type,
+            'major_groups': exercise.major_groups,
+            'minor_groups': exercise.minor_groups,
+            'amount_sets': exercise.amount_sets,
+            'rest_time': exercise.rest_time
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/sets', methods=['GET'])
+def get_exercise_sets(exercise_id):
+    try:
+        # Get the most recent set history for this exercise
+        latest_history = SetHistory.query\
+            .filter_by(exercise_id=exercise_id)\
+            .order_by(SetHistory.created_at.desc())\
+            .first()
+            
+        if latest_history:
+            sets = IndividualSet.query\
+                .filter_by(history_id=latest_history.id)\
+                .order_by(IndividualSet.set_number)\
+                .all()
+                
+            return jsonify({
+                'sets': [{
+                    'id': set.id,
+                    'set_number': set.set_number,
+                    'reps': set.reps,
+                    'weight': set.weight
+                } for set in sets]
+            })
+        return jsonify({'sets': []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/sets', methods=['POST'])
+def add_exercise_sets(exercise_id):
+    try:
+        data = request.json
+        sets_data = data.get('sets', [])
+        
+        # Create new history entry
+        history = SetHistory(exercise_id=exercise_id)
+        db.session.add(history)
+        db.session.flush()  # Get the history ID
+        
+        # Add sets
+        for set_data in sets_data:
+            new_set = IndividualSet(
+                exercise_id=exercise_id,
+                set_history_id=history.id,  # Add this line
+                set_number=set_data['set_number'],
+                reps=set_data['reps'],
+                weight=set_data['weight']
+            )
+            db.session.add(new_set)
+            
+        db.session.commit()
+        return jsonify({'message': 'Sets added successfully'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving sets: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/sets/history', methods=['GET'])
+def get_exercise_history(exercise_id):
+    try:
+        histories = SetHistory.query\
+            .filter_by(exercise_id=exercise_id)\
+            .order_by(SetHistory.created_at.desc())\
+            .all()
+        
+        return jsonify({
+            'history': [{
+                'id': history.id,
+                'created_at': history.created_at.isoformat(),
+                'sets': [{
+                    'set_number': set.set_number,
+                    'reps': set.reps,
+                    'weight': set.weight
+                } for set in sorted(history.individual_sets, key=lambda x: x.set_number)]
+            } for history in histories]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 class IndividualSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    set_history_id = db.Column(db.Integer, db.ForeignKey('set_history.id'), nullable=False)
     set_number = db.Column(db.Integer, nullable=False)
     reps = db.Column(db.Integer, nullable=False)
-    weight = db.Column(db.Float, nullable=False)
+    weight = db.Column(db.Integer, nullable=False)
+    
 
 class WorkoutPlan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -807,45 +913,7 @@ def get_all_recipes():
         }), 500
 
 
-@app.route('/api/exercise/<int:exercise_id>/sets', methods=['GET'])
-def get_exercise_sets(exercise_id):
-    try:
-        sets = IndividualSet.query.filter_by(exercise_id=exercise_id).order_by(IndividualSet.set_number).all()
-        return jsonify({
-            'sets': [{
-                'id': s.id,
-                'set_number': s.set_number,
-                'reps': s.reps,
-                'weight': s.weight
-            } for s in sets]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/exercise/<int:exercise_id>/sets', methods=['POST'])
-def add_exercise_sets(exercise_id):
-    try:
-        data = request.json
-        sets = data.get('sets', [])
-        
-        # First delete existing sets
-        IndividualSet.query.filter_by(exercise_id=exercise_id).delete()
-        
-        # Add new sets
-        for set_data in sets:
-            new_set = IndividualSet(
-                exercise_id=exercise_id,
-                set_number=set_data['set_number'],
-                reps=set_data['reps'],
-                weight=set_data['weight']
-            )
-            db.session.add(new_set)
-            
-        db.session.commit()
-        return jsonify({'message': 'Sets added successfully'})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recipe', methods=['POST'])
 def add_recipe():
