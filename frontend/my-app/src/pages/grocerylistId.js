@@ -114,6 +114,8 @@ const MenuSelectionModal = ({ listId, onClose, onSelect }) => {
 
 // GroceryItem component for displaying and editing individual items
 const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
+  const isMenuHeader = item.name.startsWith('###');
+  const isRecipeHeader = item.name.startsWith('**');
   const [localData, setLocalData] = useState({
     quantity: parseFloat(item.quantity) || 0,
     unit: item.unit || '',
@@ -192,64 +194,69 @@ const GroceryItem = ({ item, listId, onUpdate, onDelete }) => {
   
 
   return (
-    <tr className="border-b">
+    <tr className={`border-b ${
+      isMenuHeader ? 'bg-gray-200 font-bold' : 
+      isRecipeHeader ? 'bg-gray-100 font-bold italic' : ''
+      }`}>
       <td className="py-2 px-4">{item.name}</td>
-      <td className="py-2 px-4">
-        <input
-          type="number"
-          value={localData.quantity}
-          onChange={(e) => {
-            const value = parseFloat(e.target.value) || 0;
-            setLocalData(prev => ({
-              ...prev,
-              quantity: value,
-              total: value * prev.price_per
-            }));
-          }}
-          onBlur={(e) => handleUpdate('quantity', parseFloat(e.target.value) || 0)}
-          className="w-20 p-1 border rounded text-right"
-          min="0"
-          step="1"
-        />
-      </td>
-      <td className="py-2 px-4">
-        <input
-          type="text"
-          value={localData.unit}
-          onChange={(e) => setLocalData(prev => ({ ...prev, unit: e.target.value }))}
-          onBlur={(e) => handleUpdate('unit', e.target.value)}
-          className="w-20 p-1 border rounded"
-        />
-      </td>
-      <td className="py-2 px-4">
-        <input
-          type="number"
-          value={localData.price_per}
-          onChange={(e) => {
-            const value = parseFloat(e.target.value) || 0;
-            setLocalData(prev => ({
-              ...prev,
-              price_per: value,
-              total: prev.quantity * value
-            }));
-          }}
-          onBlur={(e) => handleUpdate('price_per', parseFloat(e.target.value) || 0)}
-          className="w-24 p-1 border rounded text-right"
-          min="0"
-          step="1"
-        />
-      </td>
-      <td className="py-2 px-4 text-right">
-        ${localData.total.toFixed(2)}
-      </td>
-      <td className="py-2 px-4">
-        <button
-          onClick={handleDelete}
-          className="text-red-500 hover:text-red-700"
-        >
-         {item.name.startsWith('✓') ? <X size={20} /> : <Check size={20} />}
-        </button>
-      </td>
+      {/* Only show input fields for regular items */}
+      {!isMenuHeader ? (
+      <><td className="py-2 px-4">
+          <input
+            type="number"
+            value={localData.quantity}
+            onChange={(e) => {
+              const value = parseFloat(e.target.value) || 0;
+              setLocalData(prev => ({
+                ...prev,
+                quantity: value,
+                total: value * prev.price_per
+              }));
+            } }
+            onBlur={(e) => handleUpdate('quantity', parseFloat(e.target.value) || 0)}
+            className="w-20 p-1 border rounded text-right"
+            min="0"
+            step="1" />
+        </td><td className="py-2 px-4">
+            <input
+              type="text"
+              value={localData.unit}
+              onChange={(e) => setLocalData(prev => ({ ...prev, unit: e.target.value }))}
+              onBlur={(e) => handleUpdate('unit', e.target.value)}
+              className="w-20 p-1 border rounded" />
+          </td><td className="py-2 px-4">
+            <input
+              type="number"
+              value={localData.price_per}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                setLocalData(prev => ({
+                  ...prev,
+                  price_per: value,
+                  total: prev.quantity * value
+                }));
+              } }
+              onBlur={(e) => handleUpdate('price_per', parseFloat(e.target.value) || 0)}
+              className="w-24 p-1 border rounded text-right"
+              min="0"
+              step="1" />
+          </td><td className="py-2 px-4 text-right">
+            ${localData.total.toFixed(2)}
+          </td><td className="py-2 px-4">
+            <button
+              onClick={handleDelete}
+              className="text-red-500 hover:text-red-700"
+            >
+              {item.name.startsWith('✓') ? <X size={20} /> : <Check size={20} />}
+            </button>
+          </td></>
+      
+           ) : (
+               <>
+                 <td colSpan="4"></td>
+                 <td></td>
+              </>
+             )}
     </tr>
   );
 };
