@@ -5,25 +5,31 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from datetime import datetime
+import mysql
 from sqlalchemy import text
 from fuzzywuzzy import fuzz
 from sqlalchemy import func
 from receipt_parser import parse_receipt  # Add at top with other imports
+from workouts import init_app as init_workouts
+
+
+
 
 
 app = Flask(__name__)
 CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"]
+     r"/api/*": {
+         "origins": "*",
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": ["Content-Type", "Authorization", "Access-Control-Allow-Origin"]
     }
 })
-
+ 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:RecipePassword123!@localhost/recipe_finder'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
+ 
+db = SQLAlchemy()
+db.init_app(app)
 migrate = Migrate(app, db)
 
 
@@ -35,7 +41,7 @@ class MealPrepWeek(db.Model):
 class WorkoutPrepWeek(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     start_day = db.Column(db.String(20), nullable=False)
-    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+    
     
 class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -208,6 +214,19 @@ class IndividualSet(db.Model):
     set_number = db.Column(db.Integer, nullable=False)
     reps = db.Column(db.Integer, nullable=False)
     weight = db.Column(db.Integer, nullable=False)
+
+class Workout(db.Model):
+    __tablename__ = 'workouts'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    exercises = db.relationship('Exercise', secondary='workout_exercises', 
+                              backref=db.backref('workouts', lazy=True))
+
+class WorkoutExercise(db.Model):
+    __tablename__ = 'workout_exercises'
+    workout_id = db.Column(db.Integer, db.ForeignKey('workouts.id', ondelete='CASCADE'), primary_key=True)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id', ondelete='CASCADE'), primary_key=True)
     
 
 class WorkoutPlan(db.Model):
@@ -2136,6 +2155,44 @@ def get_recipe_nutrition(recipe_id):
         print(f"Error getting nutrition info: {str(e)}")
         return jsonify({'error': str(e)}), 500
     
+@app.route('/api/workouts', methods=['POST'])
+def create_workout():
+    try:
+        data = request.json
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Workout name is required'}), 400
+        
+        new_workout = Workout(name=data['name'])
+        db.session.add(new_workout)
+        db.session.commit()
+        
+        return jsonify({
+            'id': new_workout.id,
+            'name': new_workout.name
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating workout: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/api/workouts', methods=['GET'])
+def get_workouts():
+    try:
+        workouts = Workout.query.order_by(Workout.created_at.desc()).all()
+        workouts_data = [{
+            'id': workout.id,
+            'name': workout.name,
+            'created_at': workout.created_at.isoformat() if workout.created_at else None,
+            'exercise_count': len(workout.exercises)
+        } for workout in workouts]
+        
+        return jsonify({"workouts": workouts_data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 
 
      

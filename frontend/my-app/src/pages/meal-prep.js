@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Plus, X, Search, Check } from 'lucide-react';
 import ExerciseDisplay from '../components/ExerciseDisplay';
+import WorkoutDisplay from '../components/WorkoutDisplay';
 
 const SearchableRecipeSelector = ({ isOpen, onClose, onSelect, mealType }) => {
   const [recipes, setRecipes] = useState([]);
@@ -469,17 +470,24 @@ const MealDisplay = ({ meal, onDelete }) => {
   
   const MealPrepPage = () => {
     const [viewMode, setViewMode] = useState(() => {
-      // Get the last selected tab from localStorage, default to 'mealprep' if none exists
-      return localStorage.getItem('lastMealPrepTab') || 'mealprep';
-    });
+        if (typeof window !== 'undefined') {
+            // Get the last selected tab from localStorage, default to 'mealprep' if none exists
+            return localStorage.getItem('lastMealPrepTab') || 'mealprep';
+          }
+          // Return default value for server-side rendering
+          return 'mealprep';
+        });
     const [showDaySelector, setShowDaySelector] = useState(false);
     const [weeks, setWeeks] = useState([]);
     const [loading, setLoading] = useState(true);
   
     // Update localStorage whenever viewMode changes
     useEffect(() => {
-      localStorage.setItem('lastMealPrepTab', viewMode);
-    }, [viewMode]);
+        // Check if localStorage is available
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lastMealPrepTab', viewMode);
+        }
+      }, [viewMode]);
   
     const fetchWeeks = async () => {
       try {
@@ -583,6 +591,16 @@ const MealDisplay = ({ meal, onDelete }) => {
               >
                 My Exercises
               </button>
+              <button
+             onClick={() => setViewMode('workouts')}
+             className={`px-4 py-2 rounded-lg ${
+               viewMode === 'workouts'
+                 ? 'bg-blue-600 text-white'
+                 : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                My Workouts
+              </button>
             </div>
   
             {viewMode === 'workout' && (
@@ -599,6 +617,11 @@ const MealDisplay = ({ meal, onDelete }) => {
                 <ExerciseDisplay />
               </div>
             )}
+             {viewMode === 'workouts' && (
+        <div>
+           <WorkoutDisplay />
+         </div>
+       )}
   
             {viewMode === 'mealprep' && (
               <>
