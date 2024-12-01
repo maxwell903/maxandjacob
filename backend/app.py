@@ -55,7 +55,8 @@ class SetHistory(db.Model):
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     sets = db.relationship('IndividualSet', backref='history', lazy=True, cascade='all, delete-orphan')
-    
+
+
 
 @app.route('/api/exercises/<int:exercise_id>', methods=['GET'])
 def get_exercise(exercise_id):
@@ -68,6 +69,8 @@ def get_exercise(exercise_id):
             'major_groups': exercise.major_groups,
             'minor_groups': exercise.minor_groups,
             'amount_sets': exercise.amount_sets,
+            'amount_reps': exercise.amount_reps,
+            'weight': exercise.weight,
             'rest_time': exercise.rest_time
         })
     except Exception as e:
@@ -98,6 +101,40 @@ def get_exercise_sets(exercise_id):
             })
         return jsonify({'sets': []})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/set/<int:set_id>', methods=['DELETE'])
+def delete_individual_set(set_id):
+    try:
+        set_to_delete = IndividualSet.query.get_or_404(set_id)
+        db.session.delete(set_to_delete)
+        db.session.commit()
+        return jsonify({'message': 'Set deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting set: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercises/<int:exercise_id>', methods=['PUT'])
+def update_exercise(exercise_id):
+    try:
+        exercise = Exercise.query.get_or_404(exercise_id)
+        data = request.json
+        
+        exercise.name = data['name']
+        exercise.workout_type = data['workout_type']
+        exercise.major_groups = data['major_groups']
+        exercise.minor_groups = data['minor_groups']
+        exercise.amount_sets = data['amount_sets']
+        exercise.amount_reps = data['amount_reps']
+        exercise.weight = data['weight']
+        exercise.rest_time = data['rest_time']
+        
+        db.session.commit()
+        return jsonify({'message': 'Exercise updated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating exercise: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/exercise/<int:exercise_id>/sets', methods=['POST'])
@@ -181,6 +218,53 @@ class WorkoutPlan(db.Model):
     exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
     workout_prep_week = db.relationship('WorkoutPrepWeek', backref=db.backref('workouts', lazy=True, cascade='all, delete-orphan'))
     exercise = db.relationship('Exercise', backref=db.backref('workout_plan', lazy=True))
+
+@app.route('/api/exercises/<int:exercise_id>', methods=['DELETE'])
+def delete_exercise(exercise_id):
+    try:
+        # This will cascade delete all associated history and sets
+        exercise = Exercise.query.get_or_404(exercise_id)
+        db.session.delete(exercise)
+        db.session.commit()
+        return jsonify({'message': 'Exercise deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting exercise: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/sets/<int:set_id>', methods=['DELETE'])
+def delete_set(exercise_id, set_id):
+    try:
+        set = IndividualSet.query.get_or_404(set_id)
+        
+        # Verify the set belongs to the correct exercise
+        if set.exercise_id != exercise_id:
+            return jsonify({'error': 'Set does not belong to this exercise'}), 404
+            
+        db.session.delete(set)
+        db.session.commit()
+        return jsonify({'message': 'Set deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting set: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exercise/<int:exercise_id>/history/<int:history_id>', methods=['DELETE'])
+def delete_exercise_history(exercise_id, history_id):
+    try:
+        history = SetHistory.query.get_or_404(history_id)
+        
+        # Verify the history belongs to the correct exercise
+        if history.exercise_id != exercise_id:
+            return jsonify({'error': 'History does not belong to this exercise'}), 404
+            
+        db.session.delete(history)
+        db.session.commit()
+        return jsonify({'message': 'History deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/exercise', methods=['POST', 'OPTIONS'])
 def create_exercise():
