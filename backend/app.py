@@ -31,6 +31,56 @@ class MealPrepWeek(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     start_day = db.Column(db.String(20), nullable=False)
     created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class WorkoutPrepWeek(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    start_day = db.Column(db.String(20), nullable=False)
+    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+    
+class Exercise(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    workout_type = db.Column(db.Enum('Push', 'Pull', 'Legs', 'Cardio'), nullable=False)
+    major_groups = db.Column(db.JSON, nullable=False)
+    minor_groups = db.Column(db.JSON, nullable=False)
+    amount_sets = db.Column(db.Integer, nullable=False)
+    amount_reps = db.Column(db.Integer, nullable=False)
+    weight = db.Column(db.Integer, nullable=False)
+    rest_time = db.Column(db.Integer, nullable=False)
+
+class WorkoutPlan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    week_id = db.Column(db.Integer, db.ForeignKey('workout_prep_week.id'), nullable=False)
+    day = db.Column(db.String(20), nullable=False)
+    workout_type = db.Column(db.String(20), nullable=False)
+    exercise_id = db.Column(db.Integer, db.ForeignKey('exercise.id'), nullable=False)
+    workout_prep_week = db.relationship('WorkoutPrepWeek', backref=db.backref('workouts', lazy=True, cascade='all, delete-orphan'))
+    exercise = db.relationship('Exercise', backref=db.backref('workout_plan', lazy=True))
+
+@app.route('/api/exercise', methods=['POST', 'OPTIONS'])
+def create_exercise():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+        
+    try:
+        data = request.json
+        exercise = Exercise(
+            name=data['name'],
+            workout_type=data['workout_type'],
+            major_groups=data['major_groups'],
+            minor_groups=data['minor_groups'],
+            amount_sets=data['amount_sets'],
+            amount_reps=data['amount_reps'],
+            weight=data['weight'],
+            rest_time=data['rest_time']
+        )
+        db.session.add(exercise)
+        db.session.commit()
+        return jsonify({'message': 'Exercise created successfully'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
     
 
 class MealPlan(db.Model):
@@ -525,7 +575,25 @@ def parse_grocery_receipt():
        return jsonify({'error': str(e)}), 500
 
 
-
+@app.route('/api/exercises', methods=['GET'])
+def get_exercises():
+    try:
+        exercises = Exercise.query.all()
+        return jsonify({
+            'exercises': [{
+                'id': ex.id,
+                'name': ex.name,
+                'workout_type': ex.workout_type,
+                'major_groups': ex.major_groups,
+                'minor_groups': ex.minor_groups,
+                'amount_sets': ex.amount_sets,
+                'amount_reps': ex.amount_reps,
+                'weight': ex.weight,
+                'rest_time': ex.rest_time
+            } for ex in exercises]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     
 # Add these new routes above the existing grocery list routes
 

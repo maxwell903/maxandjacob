@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Plus, X, Search, Check } from 'lucide-react';
+import ExerciseDisplay from '../components/ExerciseDisplay';
 
 const SearchableRecipeSelector = ({ isOpen, onClose, onSelect, mealType }) => {
   const [recipes, setRecipes] = useState([]);
@@ -574,7 +575,31 @@ const MealDisplay = ({ meal, onDelete }) => {
               >
                 My Meal Prep
               </button>
+              <button
+                onClick={() => setViewMode('workout')}
+                className={`px-4 py-2 rounded-lg ${
+                  viewMode === 'workout'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                My Workout
+              </button>
             </div>
+            {viewMode === 'workout' && (
+                <div>
+  <div className="flex justify-between items-center mb-6">
+    <h1 className="text-3xl font-bold text-gray-900">My Workout</h1>
+    <Link
+      href="/exercise-form"
+      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+    >
+      My Exercises
+    </Link>
+  </div>
+  <ExerciseDisplay />
+  </div>
+)}
   
             {viewMode === 'mealprep' ? (
               <>
@@ -612,6 +637,7 @@ const MealDisplay = ({ meal, onDelete }) => {
                 style={{ height: 'calc(100vh - 200px)' }}
               />
             )}
+
           </div>
   
           <DaySelector
