@@ -136,7 +136,7 @@ const ExerciseForm = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sets
+                Target Sets
               </label>
               <input
                 type="number"
@@ -166,7 +166,7 @@ const ExerciseForm = () => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Max Weight (lbs)
+                Target Weight For Set (lbs)
               </label>
               <input
                 type="number"
@@ -181,7 +181,7 @@ const ExerciseForm = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reps for Max
+                Target Reps For Set
               </label>
               <input
                 type="number"

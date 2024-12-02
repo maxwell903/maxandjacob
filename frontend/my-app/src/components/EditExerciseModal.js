@@ -125,7 +125,7 @@ const EditExerciseModal = ({ isOpen, onClose, exercise, onUpdate }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sets
+                Target Sets
               </label>
               <input
                 type="number"
@@ -155,7 +155,7 @@ const EditExerciseModal = ({ isOpen, onClose, exercise, onUpdate }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Max Weight (lbs)
+                Target Weight For Set
               </label>
               <input
                 type="number"
@@ -169,7 +169,7 @@ const EditExerciseModal = ({ isOpen, onClose, exercise, onUpdate }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reps for Max
+                Target Reps:
               </label>
               <input
                 type="number"

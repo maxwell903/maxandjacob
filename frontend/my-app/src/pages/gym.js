@@ -113,54 +113,81 @@ const ExerciseSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
 // Exercise card component
 const ExerciseCard = ({ exercise, onDelete }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="relative bg-gray-50 p-4 rounded">
-      <button
-        onClick={() => onDelete(exercise.id)}
-        className="absolute top-2 right-2 text-red-500 hover:text-red-700"
-      >
-        <X size={16} />
-      </button>
-
-      <div 
-        className="cursor-pointer"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex justify-between items-center">
-          <h3 className="font-medium">{exercise.name}</h3>
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
-
-        <div className="text-sm text-gray-600 mt-1">
-          {exercise.workout_type} • {exercise.major_groups.join(', ')}
-        </div>
-
-        {exercise.latestSet && (
-          <div className="text-sm text-gray-600 mt-1">
-            Last set: {exercise.latestSet.weight}lbs × {exercise.latestSet.reps} reps
+    const [isExpanded, setIsExpanded] = useState(false);
+  
+    const lastSetInfo = exercise.latestSet 
+      ? `${exercise.latestSet.weight}lbs × ${exercise.latestSet.reps}`
+      : "No sets recorded";
+  
+    return (
+      <div className="relative bg-gray-50 p-4 rounded">
+        <button
+          onClick={() => onDelete(exercise.id)}
+          className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+        >
+          <X size={16} />
+        </button>
+  
+        <div 
+          className="cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <h3 className="font-medium mb-1">{exercise.name}</h3>
+          <div className="text-sm text-blue-600 font-medium mb-2">
+            {exercise.workout_type}
           </div>
-        )}
-
-        {isExpanded && (
-          <div className="mt-2 space-y-2 text-sm">
-            <div>Minor Groups: {exercise.minor_groups.join(', ')}</div>
-            <div>Target: {exercise.amount_sets} sets • {exercise.amount_reps} reps</div>
-            <div>Max Weight: {exercise.weight}lbs</div>
-            <div>Rest Period: {exercise.rest_time}s</div>
-            <Link 
-              href={`/exercise/${exercise.id}`}
-              className="text-blue-600 hover:text-blue-800 block mt-2"
-            >
-              View History →
-            </Link>
+  
+          <div className="text-sm text-gray-600">
+            <div className="font-medium">Last Top Set:</div>
+            <div className="text-base text-gray-700">
+              {lastSetInfo}
+            </div>
           </div>
-        )}
+  
+          {isExpanded && (
+            <div className="mt-3 space-y-3 text-sm border-t pt-2">
+              <div>
+                <div className="font-medium mb-1">Major Groups</div>
+                <ul className="list-inside space-y-1">
+                  {exercise.major_groups.map((group, index) => (
+                    <li key={index} className="flex items-center">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
+                      {group}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+  
+              <div>
+                <div className="font-medium mb-1">Minor Groups</div>
+                <ul className="list-inside space-y-1">
+                  {exercise.minor_groups.map((group, index) => (
+                    <li key={index} className="flex items-center">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
+                      {group}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+  
+              <div>Target: {exercise.amount_sets} sets • {exercise.amount_reps} reps</div>
+              <div>Rest Period: {exercise.rest_time}s</div>
+              <Link 
+                href={`/exercise/${exercise.id}`}
+                className="text-blue-600 hover:text-blue-800 block mt-2"
+              >
+                View History →
+              </Link>
+            </div>
+          )}
+  
+          <div className="flex justify-end mt-2">
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 // Main Gym page component
 const GymPage = () => {

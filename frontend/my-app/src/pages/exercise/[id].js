@@ -179,8 +179,8 @@ export default function ExerciseHistory() {
               <h1 className="text-2xl font-bold text-gray-900">{exercise.name} History</h1>
               <div className="mt-2 text-sm text-gray-600">
                 <p>Workout Type: {exercise.workout_type}</p>
-                <p>Target Sets: {exercise.amount_sets}</p>
-                <p>Max Weight: {exercise.weight} lbs × {exercise.amount_reps} reps</p>
+                <p>Target Set: {exercise.amount_sets} x {exercise.amount_reps} reps</p>
+                <p>Target Weight {exercise.weight} lbs </p>
                 <p>Rest Period: {exercise.rest_time} seconds</p>
               </div>
             </div>
