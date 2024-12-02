@@ -184,7 +184,7 @@ const WorkoutDisplay = () => {
     if (!selectedWorkout) return;
 
     try {
-      await fetch(`http://localhost:5000/api/workouts/${selectedWorkout}/exercises`, {
+      await fetch(`http://localhost:5000/api/workouts/${selectedWorkout}/exercise`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ exercise_id: exercise.id })
