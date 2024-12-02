@@ -128,12 +128,12 @@ export default function WorkoutCards() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">My Workouts</h1>
         <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Add Workout
-        </button>
+  onClick={() => setShowDaySelector(true)}
+  className="text-blue-600 hover:text-blue-800"
+  title="Add to Weekly Plan"
+>
+  <Plus size={20} />
+</button>
       </div>
 
       {workouts.map((workout) => (

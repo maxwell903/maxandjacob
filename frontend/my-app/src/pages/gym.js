@@ -326,9 +326,18 @@ const GymPage = () => {
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex justify-between items-center">
           <Link href="/" className="text-blue-600 hover:text-blue-800">
             ← Back to Home
           </Link>
+          <Link
+              href="/meal-prep"
+              onClick={() => localStorage.setItem('lastMealPrepTab', 'workout')}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Exercises
+            </Link>
+        </div>
         </div>
       </nav>
 

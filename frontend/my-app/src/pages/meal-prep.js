@@ -591,16 +591,16 @@ const MealDisplay = ({ meal, onDelete }) => {
               >
                 My Exercises
               </button>
-              <button
-             onClick={() => setViewMode('workouts')}
-             className={`px-4 py-2 rounded-lg ${
-               viewMode === 'workouts'
-                 ? 'bg-blue-600 text-white'
-                 : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                My Workouts
-              </button>
+              <Link
+  href="/gym"
+  className={`px-4 py-2 rounded-lg ${
+    viewMode === 'workout'
+      ? 'bg-gray-200 text-gray-700'
+      : 'bg-gray-200 text-gray-700'
+  }`}
+>
+  My Workouts
+</Link>
             </div>
   
             {viewMode === 'workout' && (
