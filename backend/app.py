@@ -10,7 +10,9 @@ from sqlalchemy import text
 from fuzzywuzzy import fuzz
 from sqlalchemy import func
 from receipt_parser import parse_receipt  # Add at top with other imports
-from workouts import init_app as init_workouts
+import mysql.connector
+from mysql.connector import Error
+
 
 
 
@@ -31,6 +33,19 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy()
 db.init_app(app)
 migrate = Migrate(app, db)
+
+def get_db_connection():
+    try:
+        connection = mysql.connector.connect(
+            host='localhost',
+            user='root',  # Update with your MySQL username
+            password='RecipePassword123!',  # Update with your MySQL password
+            database='recipe_finder'  # Update with your database name
+        )
+        return connection
+    except Error as e:
+        print(f"Error connecting to MySQL: {e}")
+        return None
 
 
 class MealPrepWeek(db.Model):
@@ -2193,7 +2208,155 @@ def get_workouts():
         return jsonify({"error": str(e)}), 500
 
 
+# Add these routes to your Flask app
+from flask import jsonify, request
+from datetime import datetime
 
+@app.route('/api/weekly-workouts', methods=['GET'])
+def get_weekly_workouts():
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cursor = connection.cursor(dictionary=True)
+        
+        # First get all workouts
+        cursor.execute("""
+            SELECT w.day, w.exercise_id,
+                   e.name, e.workout_type, e.major_groups, e.minor_groups,
+                   e.amount_sets, e.amount_reps, e.weight, e.rest_time
+            FROM weekly_workouts w
+            JOIN exercises e ON w.exercise_id = e.id
+            ORDER BY w.day, e.workout_type
+        """)
+        workout_rows = cursor.fetchall()
+        
+        # Get latest sets for all exercises
+        workouts = {}
+        for row in workout_rows:
+            day = row['day']
+            if day not in workouts:
+                workouts[day] = []
+            
+            # Get latest set for this exercise
+            cursor.execute("""
+                SELECT weight, reps, created_at
+                FROM individual_set
+                WHERE exercise_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+            """, (row['exercise_id'],))
+            latest_set = cursor.fetchone()
+            
+            exercise = {
+                'id': row['exercise_id'],
+                'name': row['name'],
+                'workout_type': row['workout_type'],
+                'major_groups': row['major_groups'].split(','),
+                'minor_groups': row['minor_groups'].split(','),
+                'amount_sets': row['amount_sets'],
+                'amount_reps': row['amount_reps'],
+                'weight': row['weight'],
+                'rest_time': row['rest_time'],
+                'latestSet': latest_set
+            }
+            workouts[day].append(exercise)
+        
+        cursor.close()
+        connection.close()
+        return jsonify({'workouts': workouts})
+    except Exception as e:
+        print(f"Error in get_weekly_workouts: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/weekly-workouts', methods=['POST'])
+def add_workout():
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        data = request.json
+        day = data['day']
+        exercises = data['exercises']
+        
+        cursor = connection.cursor()
+        
+        # Add each exercise to the weekly workout
+        for exercise in exercises:
+            # Check if entry already exists
+            cursor.execute("""
+                INSERT IGNORE INTO weekly_workouts (day, exercise_id)
+                VALUES (%s, %s)
+            """, (day, exercise['id']))
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'message': 'Workout added successfully'})
+    except Exception as e:
+        print(f"Error in add_workout: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/weekly-workouts/<day>/<int:exercise_id>', methods=['DELETE'])
+def remove_workout_exercise(day, exercise_id):
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cursor = connection.cursor()
+        cursor.execute("""
+            DELETE FROM weekly_workouts 
+            WHERE day = %s AND exercise_id = %s
+        """, (day, exercise_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'message': 'Exercise removed successfully'})
+    except Exception as e:
+        print(f"Error in remove_workout_exercise: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/exercise/<int:exercise_id>/sets/latest', methods=['GET'])
+def get_latest_set(exercise_id):
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get the set with the highest weight for this exercise
+        cursor.execute("""
+            SELECT id, exercise_id, weight, reps, created_at
+            FROM individual_set 
+            WHERE exercise_id = %s 
+            ORDER BY weight DESC, created_at DESC
+            LIMIT 1
+        """, (exercise_id,))
+        
+        best_set = cursor.fetchone()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({
+            'latestSet': {
+                'id': best_set['id'],
+                'exercise_id': best_set['exercise_id'],
+                'weight': best_set['weight'],
+                'reps': best_set['reps'],
+                'created_at': best_set['created_at'].isoformat() if best_set['created_at'] else None
+            } if best_set else None
+        })
+        
+    except Exception as e:
+        print(f"Error fetching best set: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
      
 def upgrade_database():
