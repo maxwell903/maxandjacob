@@ -117,12 +117,7 @@ export default function Home() {
               >
                 Grocery Bill
               </Link>
-              <Link 
-  href="/gym"
-  className="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white hover:bg-red-700 transition-colors duration-200"
->
-  Gym
-</Link>
+             
            
 
             {error && (

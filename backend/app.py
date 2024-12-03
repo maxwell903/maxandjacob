@@ -2212,6 +2212,86 @@ def get_workouts():
 from flask import jsonify, request
 from datetime import datetime
 
+@app.route('/api/weekly-workouts/<day>/<int:exercise_id>', methods=['DELETE'])
+def remove_workout_exercise(day, exercise_id):
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cursor = connection.cursor()
+        
+        # First verify the record exists
+        cursor.execute("""
+            SELECT id FROM weekly_workouts 
+            WHERE day = %s AND exercise_id = %s
+        """, (day, exercise_id))
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Workout not found'}), 404
+        
+        # Then delete it
+        cursor.execute("""
+            DELETE FROM weekly_workouts 
+            WHERE day = %s AND exercise_id = %s
+        """, (day, exercise_id))
+        
+        # Important: Commit the transaction
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'message': 'Exercise removed successfully'}), 200
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        print(f"Error removing workout exercise: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/weekly-workouts', methods=['POST'])
+def add_workout():
+    try:
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        data = request.json
+        if not data or 'day' not in data or 'exercises' not in data:
+            return jsonify({'error': 'Invalid request data'}), 400
+            
+        day = data['day']
+        exercises = data['exercises']
+        
+        cursor = connection.cursor()
+        
+        # Clear any existing exercise for this day first
+        cursor.execute("""
+            DELETE FROM weekly_workouts 
+            WHERE day = %s AND exercise_id = %s
+        """, (day, exercises[0]['id']))
+        
+        # Then add the new one
+        cursor.execute("""
+            INSERT INTO weekly_workouts (day, exercise_id)
+            VALUES (%s, %s)
+        """, (day, exercises[0]['id']))
+        
+        # Important: Commit the transaction
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        return jsonify({'message': 'Workout added successfully'}), 200
+    except Exception as e:
+        if connection:
+            connection.rollback()
+            connection.close()
+        print(f"Error adding workout: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/weekly-workouts', methods=['GET'])
 def get_weekly_workouts():
     try:
@@ -2221,32 +2301,57 @@ def get_weekly_workouts():
             
         cursor = connection.cursor(dictionary=True)
         
-        # First get all workouts
+        # First get all weekly workouts with exercise details
         cursor.execute("""
-            SELECT w.day, w.exercise_id,
-                   e.name, e.workout_type, e.major_groups, e.minor_groups,
-                   e.amount_sets, e.amount_reps, e.weight, e.rest_time
+            SELECT DISTINCT
+                w.day,
+                w.exercise_id,
+                e.name,
+                e.workout_type,
+                e.major_groups,
+                e.minor_groups,
+                e.amount_sets,
+                e.amount_reps,
+                e.weight,
+                e.rest_time,
+                w.created_at
             FROM weekly_workouts w
             JOIN exercises e ON w.exercise_id = e.id
-            ORDER BY w.day, e.workout_type
+            ORDER BY w.day, w.created_at DESC
         """)
-        workout_rows = cursor.fetchall()
         
-        # Get latest sets for all exercises
+        workout_rows = cursor.fetchall()
         workouts = {}
+        
+        # Process each workout row
         for row in workout_rows:
             day = row['day']
             if day not in workouts:
                 workouts[day] = []
             
-            # Get latest set for this exercise
+            # Get the latest set for this exercise, ensuring we get from the most recent session
             cursor.execute("""
-                SELECT weight, reps, created_at
-                FROM individual_set
-                WHERE exercise_id = %s
-                ORDER BY created_at DESC
-                LIMIT 1
-            """, (row['exercise_id'],))
+                WITH LatestSession AS (
+                    SELECT DATE(created_at) as session_date
+                    FROM individual_set
+                    WHERE exercise_id = %s
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ),
+                TopSet AS (
+                    SELECT 
+                        s.weight,
+                        s.reps,
+                        s.created_at
+                    FROM individual_set s
+                    JOIN LatestSession ls ON DATE(s.created_at) = ls.session_date
+                    WHERE s.exercise_id = %s
+                    ORDER BY s.weight DESC
+                    LIMIT 1
+                )
+                SELECT * FROM TopSet
+            """, (row['exercise_id'], row['exercise_id']))
+            
             latest_set = cursor.fetchone()
             
             exercise = {
@@ -2259,68 +2364,28 @@ def get_weekly_workouts():
                 'amount_reps': row['amount_reps'],
                 'weight': row['weight'],
                 'rest_time': row['rest_time'],
-                'latestSet': latest_set
+                'latestSet': {
+                    'weight': latest_set['weight'],
+                    'reps': latest_set['reps'],
+                    'created_at': latest_set['created_at'].isoformat() if latest_set else None
+                } if latest_set else None
             }
-            workouts[day].append(exercise)
+            
+            # Only add if we haven't already added this exercise for this day
+            if not any(e['id'] == exercise['id'] for e in workouts[day]):
+                workouts[day].append(exercise)
         
         cursor.close()
         connection.close()
+        
         return jsonify({'workouts': workouts})
+        
     except Exception as e:
-        print(f"Error in get_weekly_workouts: {str(e)}")
+        if connection:
+            connection.close()
+        print(f"Error fetching weekly workouts: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/weekly-workouts', methods=['POST'])
-def add_workout():
-    try:
-        connection = get_db_connection()
-        if not connection:
-            return jsonify({'error': 'Database connection failed'}), 500
-            
-        data = request.json
-        day = data['day']
-        exercises = data['exercises']
-        
-        cursor = connection.cursor()
-        
-        # Add each exercise to the weekly workout
-        for exercise in exercises:
-            # Check if entry already exists
-            cursor.execute("""
-                INSERT IGNORE INTO weekly_workouts (day, exercise_id)
-                VALUES (%s, %s)
-            """, (day, exercise['id']))
-        
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'message': 'Workout added successfully'})
-    except Exception as e:
-        print(f"Error in add_workout: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/weekly-workouts/<day>/<int:exercise_id>', methods=['DELETE'])
-def remove_workout_exercise(day, exercise_id):
-    try:
-        connection = get_db_connection()
-        if not connection:
-            return jsonify({'error': 'Database connection failed'}), 500
-            
-        cursor = connection.cursor()
-        cursor.execute("""
-            DELETE FROM weekly_workouts 
-            WHERE day = %s AND exercise_id = %s
-        """, (day, exercise_id))
-        connection.commit()
-        cursor.close()
-        connection.close()
-        
-        return jsonify({'message': 'Exercise removed successfully'})
-    except Exception as e:
-        print(f"Error in remove_workout_exercise: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-    
 @app.route('/api/exercise/<int:exercise_id>/sets/latest', methods=['GET'])
 def get_latest_set(exercise_id):
     try:
@@ -2330,32 +2395,39 @@ def get_latest_set(exercise_id):
             
         cursor = connection.cursor(dictionary=True)
         
-        # Get the set with the highest weight for this exercise
+        # Get the latest set by created_at first to find the most recent workout session
         cursor.execute("""
-            SELECT id, exercise_id, weight, reps, created_at
-            FROM individual_set 
-            WHERE exercise_id = %s 
-            ORDER BY weight DESC, created_at DESC
+            WITH LatestSession AS (
+                SELECT DATE(created_at) as session_date
+                FROM individual_set
+                WHERE exercise_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+            )
+            SELECT s.id, s.exercise_id, s.weight, s.reps, s.created_at
+            FROM individual_set s
+            JOIN LatestSession ls ON DATE(s.created_at) = ls.session_date
+            WHERE s.exercise_id = %s
+            ORDER BY s.weight DESC
             LIMIT 1
-        """, (exercise_id,))
+        """, (exercise_id, exercise_id))
         
-        best_set = cursor.fetchone()
+        top_set = cursor.fetchone()
         
         cursor.close()
         connection.close()
         
         return jsonify({
             'latestSet': {
-                'id': best_set['id'],
-                'exercise_id': best_set['exercise_id'],
-                'weight': best_set['weight'],
-                'reps': best_set['reps'],
-                'created_at': best_set['created_at'].isoformat() if best_set['created_at'] else None
-            } if best_set else None
+                'id': top_set['id'],
+                'exercise_id': top_set['exercise_id'],
+                'weight': top_set['weight'],
+                'reps': top_set['reps'],
+                'created_at': top_set['created_at'].isoformat() if top_set['created_at'] else None
+            } if top_set else None
         })
-        
     except Exception as e:
-        print(f"Error fetching best set: {str(e)}")
+        print(f"Error fetching latest set: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
      
