@@ -324,25 +324,44 @@ const GymPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+        
       <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex justify-between items-center">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           <Link href="/" className="text-blue-600 hover:text-blue-800">
             ← Back to Home
           </Link>
-          <Link
-              href="/meal-prep"
-              onClick={() => localStorage.setItem('lastMealPrepTab', 'workout')}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              Exercises
-            </Link>
-        </div>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Add the navigation buttons here, before the title */}
+        <div className="flex gap-4 mb-6">
+          <Link
+            href="/meal-prep"
+            onClick={() => localStorage.setItem('lastMealPrepTab', 'mealprep')}
+            className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700"
+          >
+            My Meal Prep
+          </Link>
+          <Link
+            href="/meal-prep"
+            onClick={() => localStorage.setItem('lastMealPrepTab', 'workout')}
+            className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700"
+          >
+            My Exercises
+          </Link>
+          <Link
+            href="/gym"
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white"
+          >
+            My Workouts
+          </Link>
+        </div>
+
+
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Weekly Workout Plan</h1>
+
+    
         
         <div className="grid grid-cols-7 gap-4">
           {days.map((day) => (

@@ -107,7 +107,7 @@ export default function Home() {
    className="inline-block rounded-lg bg-green-600 px-6 py-3 text-white hover:bg-green-700 transition-colors duration-200"
    onClick={() => localStorage.setItem('previousPath', '/')}
  >
-   Meal Prep
+  My Fitness
  </Link>
 
               <Link 
